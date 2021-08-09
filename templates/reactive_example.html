@@ -1,0 +1,91 @@
+{% extends "reactive_example_base.html" %}
+
+{% load reactive %}
+
+{% block title %}Basic Example{% endblock %}
+
+{% block content %}
+
+{% reactprescript %}
+
+{% with test_template_var="success" %}
+
+{% reactblock %}
+{% reactblock %}
+Test1
+{% reactdef text_dsadf test_template_var %}
+{% reactdef test_var 'test' %}
+{% reactdef test_array ['str1','str2','str3'] %}
+<script>
+{% reactset test_var %}
+{% reactget test_var %} + '11'
+{% endreactset %}
+</script>
+Test2
+{% reacttag span %}
+{% reactdef nested_var 'nested' %}
+{% for element in example_list %}
+{{ element }}
+{% reactprint test_var %}
+{% endfor %}
+Test3
+{% reactprint nested_var %}
+{% endreacttag %}
+
+{% reactdef test_bool True %}
+{% reactprint test_bool %}
+
+{% reacttag span %}
+{% reactif test_bool %}
+Test4
+{% reactprint test_var %}
+{% endreactif %}
+{% endreacttag %}
+
+{% if True %}
+{% reacttag span %}
+{% reactprint test_array %}
+
+{% reactfor element in test_array %}
+{% reactprint element %}
+{% endreactfor %}
+
+{% endreacttag %}
+{% endif %}
+
+{% comment %}
+Comment test
+{% endcomment %}
+
+<script>
+{% reactscript %}
+console.log({% reactget test_var %});
+{% endreactscript %}
+
+setTimeout(
+    function() {
+    {% reactset test_var %}
+    "hey"
+    {% endreactset %}
+
+    setTimeout(
+        function() {
+        {% reactset test_bool %}
+        false
+        {% endreactset %}
+        }, 2000);
+    }, 2000);
+
+setTimeout(
+    function() {
+    {% reactset test_array %}
+    ['str1', 'str2']
+    {% endreactset %}
+    }, 1000);
+</script>
+{% endreactblock %}
+{% endreactblock %}
+
+{% endwith %}
+
+{% endblock %}
