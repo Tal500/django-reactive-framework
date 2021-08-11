@@ -273,7 +273,7 @@ class ReactContext:
 
 
 # TODO: Make sure that we have the relation - fully renderable = inherit ReactRerendable mixin.
-class ReactRerendableContext(ReactContext):
+class ReactRerenderableContext(ReactContext):
     @abstractmethod
     def render_js_and_hooks(self, subtree: Optional[List]) -> Tuple[str, Iterable[ReactHook]]:
         """Return a tupple of (string of rerender js expression, hooks)."""

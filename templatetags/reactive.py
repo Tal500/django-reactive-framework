@@ -7,7 +7,7 @@ from django.utils.html import escapejs
 from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
-from ..core.base import ReactHook, ReactRerendableContext, ReactVar, ReactContext, ReactNode, next_id
+from ..core.base import ReactHook, ReactRerenderableContext, ReactVar, ReactContext, ReactNode, next_id
 from ..core.expressions import Expression, SettableExpression, parse_expression
 
 register = template.Library()
@@ -61,7 +61,7 @@ class ReactDefNode(ReactNode):
     tag_name = 'reactdef'
 
     # TODO: Support reactive definition (i.e. update value when expression value is changed)
-    class Context(ReactRerendableContext):
+    class Context(ReactRerenderableContext):
         def __init__(self, parent, var_name: str, var_val_expression: Expression):
             self.var_name: str = var_name
             self.var_val_expression: Expression = var_val_expression
@@ -178,7 +178,7 @@ class ReactForNode(ReactNode):
     tag_name = 'reactfor'
     tag_name_enclose = 'endreactfor'
 
-    class Context(ReactRerendableContext):
+    class Context(ReactRerenderableContext):
         def __init__(self, id: str, parent: ReactContext, var_name: str, iter_expression: Expression):
             self.var_name: str = var_name
             self.iter_expression: Expression = iter_expression
@@ -280,7 +280,7 @@ class ReactIfNode(ReactNode):
     tag_name = 'reactif'
     tag_name_enclose = 'endreactif'
 
-    class Context(ReactRerendableContext):
+    class Context(ReactRerenderableContext):
         def __init__(self, id: str, parent: ReactContext, expression: Expression):
             self.expression: Expression = expression
             super().__init__(id=id, parent=parent, fully_reactive=True)
@@ -349,7 +349,7 @@ def do_reactif(parser, token):
 class ReactPrintNode(ReactNode):
     tag_name = 'reactprint'
 
-    class Context(ReactRerendableContext):
+    class Context(ReactRerenderableContext):
         def __init__(self, parent, expression: Expression):
             self.expression: Expression = expression
             super().__init__(id='', parent=parent, fully_reactive=True)
@@ -403,7 +403,7 @@ def do_reactprint(parser, token):
 class ReactGetNode(ReactNode):
     tag_name = 'reactget'
 
-    class Context(ReactRerendableContext):
+    class Context(ReactRerenderableContext):
         def __init__(self, parent, expression: Expression):
             self.expression: Expression = expression
             super().__init__(id='', parent=parent, fully_reactive=False)
