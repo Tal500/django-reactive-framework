@@ -83,6 +83,29 @@ setTimeout(
     {% endreactset %}
     }, 1000);
 </script>
+
+<section>
+Fixed array:
+<ul>
+{% for elemen in example_list %}
+<li>
+value: {{ elemen }}
+</li>
+{% endfor %}
+</ul>
+</section>
+
+{% reacttag section %}
+Dynamic array:
+<ul>
+{% reactfor element in test_array %}
+<li>
+value: {% reactprint element %}
+</li>
+{% endreactfor %}
+</ul>
+{% endreacttag %}
+
 {% endreactblock %}
 {% endreactblock %}
 

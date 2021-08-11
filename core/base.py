@@ -244,14 +244,20 @@ class ReactContext:
             elif isinstance(node, ReactNode):
                 parse_react_node(node)
             else:
+                print(node)
                 parent_tracker = template_context.get(reacttrack_str)
 
                 tracker = ReactTracker()
                 template_context[reacttrack_str] = tracker
                 render_result: str = node.render(template_context)
+                print(render_result)
                 j = 0
                 i = render_result.find(reacttrack_uuid_str)
+                if i == -1:
+                    parse_text(render_result)
+
                 while i != -1:
+                    print("Once")
                     parse_text(render_result[j:i])
 
                     i += len(reacttrack_uuid_str)
