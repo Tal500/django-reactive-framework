@@ -7,7 +7,7 @@ from django.utils.html import escapejs
 from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
-from ..core.base import ReactHook, ReactRerenderableContext, ReactVar, ReactContext, ReactNode, next_id
+from ..core.base import ReactHook, ReactRerenderableContext, ReactVar, ReactContext, ReactNode, next_id, value_to_expression
 from ..core.expressions import Expression, SettableExpression, parse_expression
 
 register = template.Library()
@@ -30,7 +30,7 @@ class ReactBlockNode(ReactNode):
             output = self.render_html_inside(subtree)
 
             def get_def(var: ReactVar):
-                return f'var {var.js()} = {var.reactive_val_js()};'
+                return f'var {var.js()} = {var.initial_val_js(self)};'
 
             if self.parent is None:# If it is the root level context
                 script = '<script>' + '\n'.join(get_def(var) for var in self.vars_needed_decleration()) + '</script>'
@@ -68,8 +68,7 @@ class ReactDefNode(ReactNode):
             super().__init__(id='', parent=parent, fully_reactive=True)
         
         def act(self) -> None:
-            var_val = self.var_val_expression.eval_initial(self.parent)
-            var = ReactVar(self.var_name, var_val)
+            var = ReactVar(self.var_name, self.var_val_expression)
             self.parent.add_var(var)
 
         def render_html(self, subtree: List) -> str:
@@ -78,7 +77,7 @@ class ReactDefNode(ReactNode):
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             self.act()
-            return '', []
+            return '', []# TODO: Return a hook for all hooks in the expression?
         
         def render_post_script(self, subtree: Optional[List]) -> str:
             self.act()
@@ -208,7 +207,7 @@ class ReactForNode(ReactNode):
 
             html_outputs = []
             for element_val in iter_val_initial:
-                iter_var = ReactVar(self.var_name, element_val)
+                iter_var = ReactVar(self.var_name, value_to_expression(element_val))
                 self.add_var(iter_var)
 
                 html_output = self.render_html_inside(subtree)
@@ -227,26 +226,27 @@ class ReactForNode(ReactNode):
             js_section_rerender_expression, hooks_inside_unfiltered = self.render_js_and_hooks_inside(subtree)
 
             # get all the hooks without iter_var, because that on change the array it's gonna change.
-            hooks_inside = list(filter((iter_var).__ne__, hooks_inside_unfiltered))
+            hooks_inside = filter((iter_var).__ne__, hooks_inside_unfiltered)
             
-            hooks = chain(iter_hooks, hooks_inside)
+            hooks = list(chain(iter_hooks, hooks_inside))
 
             if js_section_rerender_expression:
                 def get_def(var: ReactVar, other_expression: Optional[Expression] = None):
-                    return f'const {var.js()} = {var.reactive_val_js(other_expression)};'
+                    return f'const {var.js()} = {var.reactive_val_js(self, other_expression)};'
                 
-                vars = self.vars_needed_decleration()
+                vars = list(filter((iter_var).__ne__, super().vars_needed_decleration()))
 
                 js_rerender_expression = \
                     f'(() => {{ const react_iter = {iter_val_js}; var output = \'\';' + \
                         'for (var i = 0; i < react_iter.length; ++i) {' + \
                         get_def(iter_var, "react_iter[i]") + '\n' + \
-                        '\n'.join(get_def(var) for var in vars) + \
-                        'output += ' + js_section_rerender_expression + '; }; return output; })()'
+                        '\n'.join(get_def(var) for var in vars) + '\n' + \
+                        '\n'.join((hook.js_attach('proc', False) for hook in hooks if hook in vars)) + \
+                        '\n output += ' + js_section_rerender_expression + '; }; return output; })()'
             else:
                 js_rerender_expression = None
             
-            return js_rerender_expression, hooks
+            return js_rerender_expression, (hook for hook in hooks if hook not in vars)
 
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
         iter_expression: Expression = self.iter_expression.reduce(template_context)

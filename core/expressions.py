@@ -134,7 +134,7 @@ class VariableExpression(SettableExpression):
         var = self.var(react_context)
 
         if var:
-            return var.val
+            return var.expression.eval_initial(react_context)
         else:
             return ''
 

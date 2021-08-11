@@ -51,24 +51,31 @@ class ReactHook:
 
 ReactValType = Union[str, int]
 class ReactData(ReactHook):
-    def __init__(self, val: ReactValType):
-        self.val: ReactValType = val
+    def __init__(self, expression: 'Expression'):
+        self.expression = expression
     
-    def reactive_val_js(self, other_expression = None):
-        val = self.val
-
-        var_val_expr = value_js_representation(val) if other_expression is None else other_expression
+    def initial_val_js(self, react_context: 'ReactContext', other_expression: str = None):
+        var_val_expr = value_js_representation(self.expression.eval_initial(react_context)) \
+            if other_expression is None else other_expression
+        
+        return f'new ReactVar({var_val_expr})'
+    
+    def reactive_val_js(self, react_context: 'ReactContext', other_expression: str = None):
+        var_val_expr = self.expression.eval_js_and_hooks(react_context)[0] \
+            if other_expression is None else other_expression
+        
+        print(var_val_expr)
         
         return f'new ReactVar({var_val_expr})'
 
 class ReactVar(ReactData):
-    def __init__(self, name: str, val: ReactValType):
-        super().__init__(val)
+    def __init__(self, name: str, react_expression: 'Expression'):
+        super().__init__(react_expression)
         self.name: str = name
         self.context: Optional[ReactContext] = None
     
     def __repr__(self) -> str:
-        return f"ReactVar(name: {repr(self.name)}, val: {repr(self.val)}, context: {repr(self.context)})"
+        return f"ReactVar(name: {repr(self.name)}, expression: {repr(self.expression)}, context: {repr(self.context)})"
 
     def js(self) -> str:
         return self.context.var_js(self)
