@@ -1,6 +1,7 @@
 from abc import abstractmethod
-from typing import Dict, Iterable, List, Optional, Set, Union
+from typing import Dict, Iterable, List, Optional, Set, Union, Tuple
 
+from itertools import chain
 import uuid
 
 from django import template
@@ -95,14 +96,12 @@ class ReactTracker:
     def __init__(self):
         self.childs: List[ReactNode] = []
 class ReactContext:
-    def __init__(self, id: str, parent: 'ReactContext' = None, fully_reactive: bool = False, need_get_tag_hooks: bool = False):
+    def __init__(self, id: str, parent: 'ReactContext' = None, fully_reactive: bool = False):
         self.id: str = id
         self.parent: ReactContext = parent
         self.child_contexts: List[ReactContext] = []
         self.fully_reactive: bool = fully_reactive
-        self.need_get_tag_hooks: bool = need_get_tag_hooks
         self.vars: Dict[str, ReactVar] = {}
-        self.hooks: Set[ReactHook] = set()
 
         if parent:
             parent.child_contexts.append(self)
@@ -116,7 +115,6 @@ class ReactContext:
 
         self.parent = None
         self.vars = None
-        self.hooks = None
 
         for child in self.child_contexts:
             child.destroy()
@@ -124,10 +122,9 @@ class ReactContext:
         self.child_contexts = None
     
     # Clear render computation, need for many iteration rendering
-    # TODO?: Don't use it, instead have a render board which contains varaibles and hooks, and have a result object after render.
+    # TODO?: Don't use it, instead have a render board which contains varaibles, and have a result object after render.
     def clear_render(self):
         self.vars: Dict[str, ReactVar] = {}
-        self.hooks: Set[ReactHook] = set()
 
         self.clear_render_inside()
     
@@ -147,21 +144,6 @@ class ReactContext:
         """Virtual method which tells the parent what vars in its scope are needed to be declared"""
         return sum([list(self.vars.values())] + [child.vars_needed_decleration() for child in self.child_contexts], [])
     
-    def add_hook(self, var: ReactHook):
-        if not self.fully_reactive:
-            raise template.TemplateSyntaxError(
-                "Unable to add hook, because the current react context isn't fully reactive.")
-
-        self.hooks.add(var)
-    
-    # TODO: Add support for conditional hooks, which can improve performance for example in if else tags.
-    def add_hooks(self, vars: Iterable[ReactHook], need_full_reactivity: bool = True):
-        if (not self.fully_reactive) and need_full_reactivity:
-            raise template.TemplateSyntaxError(
-                "Unable to add hooks, because the current react context isn't fully reactive.")
-
-        self.hooks.update(vars)
-    
     def search_var(self, name):
         current: ReactContext = self
 
@@ -176,7 +158,6 @@ class ReactContext:
     def var_js(self, var) -> str:
         return None
 
-    # TODO: Use pair for hooks, etc. ? Or just store them in the context?
     @abstractmethod
     def render_html(self, subtree: Optional[List]) -> str:
         pass
@@ -197,26 +178,30 @@ class ReactContext:
 
         return ''.join(strings)
     
-    def render_js_inside(self, subtree: List) -> str:
-        strings: List[str] = []
+    def render_js_and_hooks_inside(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
+        js_and_hooks: List[str, Iterable[ReactHook]] = []
         for element in subtree:
             if isinstance(element, str):
-                result = f"'{escapejs(element)}'"
+                result = f"'{escapejs(element)}'", []
             elif isinstance(element, tuple):
                 context, subsubtree = element
                 
                 # TODO: Verify that context is ReactRerendableContext, maybe by the relation to funnly renderable?
                 
-                result = context.render_js(subsubtree)
+                js_expression, hooks = context.render_js_and_hooks(subsubtree)
 
-                if not result:
+                if not js_expression:
                     continue
+
+                result = js_expression, hooks
             else:
                 raise Exception("All element of the internal subtree must be strings or pairs of form (ReactContext, subsubtree)!")
         
-            strings.append(result)
+            js_and_hooks.append(result)
 
-        return '+'.join(strings)
+        js_expressions = [js_expression for js_expression, hooks in js_and_hooks]
+        all_hooks = [hooks for js_expression, hooks in js_and_hooks]
+        return '+'.join(js_expressions), chain(*all_hooks)
     
     def generate_reduced_subtree(self, nodelist: Optional[template.NodeList], template_context: template.Context) -> List:
         if nodelist is None:
@@ -290,9 +275,8 @@ class ReactContext:
 # TODO: Make sure that we have the relation - fully renderable = inherit ReactRerendable mixin.
 class ReactRerendableContext(ReactContext):
     @abstractmethod
-    def render_js(self, subtree: Optional[List]) -> str:
-        """Return a string of rerender js expression.
-        All hooks shell be registered manually in the render context."""
+    def render_js_and_hooks(self, subtree: Optional[List]) -> Tuple[str, Iterable[ReactHook]]:
+        """Return a tupple of (string of rerender js expression, hooks)."""
         pass
 
 class ReactNode(template.Node):

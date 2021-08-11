@@ -1,11 +1,13 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+from itertools import chain
 
 from django import template
 from django.utils.html import escapejs
 from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
-from ..core.base import ReactRerendableContext, ReactVar, ReactContext, ReactNode, next_id
+from ..core.base import ReactHook, ReactRerendableContext, ReactVar, ReactContext, ReactNode, next_id
 from ..core.expressions import Expression, SettableExpression, parse_expression
 
 register = template.Library()
@@ -74,9 +76,9 @@ class ReactDefNode(ReactNode):
             self.act()
             return ''
 
-        def render_js(self, subtree: List) -> str:
+        def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             self.act()
-            return ''
+            return '', []
     
     def __init__(self, var_name: str, var_val_expression: Expression):
         self.var_name: str = var_name
@@ -118,15 +120,15 @@ class ReactTagNode(ReactNode):
         
             inner_html_output = self.render_html_inside(subtree)
             self.clear_render()
-            js_rerender_expression = self.render_js_inside(subtree)
+            js_rerender_expression, hooks = self.render_js_and_hooks_inside(subtree)
             
             script = '( () => { function proc() {' + f'document.getElementById(\'{self.id}\').innerHTML = ' + \
                 js_rerender_expression + ';}\n' + \
-                '\n'.join((hook.js_attach('proc', True) for hook in self.hooks)) +\
+                '\n'.join((hook.js_attach('proc', True) for hook in hooks)) +\
                 '} )();'
 
             return '<' + self.html_tag + (' ' + attribute_str if attribute_str else '') + \
-                '>' + inner_html_output + '</' + self.html_tag + '>'+ (f'<script>{script}</script>' if self.hooks else '')
+                '>' + inner_html_output + '</' + self.html_tag + '>'+ (f'<script>{script}</script>' if hooks else '')
     
     def __init__(self, nodelist, html_tag: str, extra_attributes):
         self.nodelist = nodelist
@@ -207,19 +209,18 @@ class ReactForNode(ReactNode):
             
             return ''.join(html_outputs)
 
-        def render_js(self, subtree: List) -> str:
+        def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             iter_val_js, iter_hooks = self.iter_expression.eval_js_and_hooks(self)
-            self.parent.add_hooks(iter_hooks)
 
             iter_var = ReactVar(self.var_name, None)
             self.add_var(iter_var)
 
-            js_section_rerender_expression = self.render_js_inside(subtree)
+            js_section_rerender_expression, hooks_inside_unfiltered = self.render_js_and_hooks_inside(subtree)
 
             # get all the hooks without iter_var, because that on change the array it's gonna change.
-            hooks_inside = list(filter((iter_var).__ne__, self.hooks))
+            hooks_inside = list(filter((iter_var).__ne__, hooks_inside_unfiltered))
             
-            self.parent.add_hooks(hooks_inside)
+            hooks = chain(iter_hooks, hooks_inside)
 
             if js_section_rerender_expression:
                 def get_def(var: ReactVar, other_expression: Optional[Expression] = None):
@@ -236,7 +237,7 @@ class ReactForNode(ReactNode):
             else:
                 js_rerender_expression = None
             
-            return js_rerender_expression
+            return js_rerender_expression, hooks
 
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
         iter_expression: Expression = self.iter_expression.reduce(template_context)
@@ -295,14 +296,14 @@ class ReactIfNode(ReactNode):
             else:
                 return ''
 
-        def render_js(self, subtree: List) -> str:
-            val_js, hooks = self.expression.eval_js_and_hooks(self)
-            self.parent.add_hooks(hooks)
+        def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
+            val_js, condition_hooks = self.expression.eval_js_and_hooks(self)
 
-            js_section_expression = self.render_js_inside(subtree)
-            self.parent.add_hooks(self.hooks)
+            js_section_expression, hooks_inside = self.render_js_and_hooks_inside(subtree)
 
-            if js_section_expression and hooks:
+            hooks = chain(condition_hooks, hooks_inside)
+
+            if js_section_expression and condition_hooks:
                 js_rerender_expression = f'({val_js}?{js_section_expression}:\'\')'
             elif js_section_expression:
                 condition_val_initial = self.expression.eval_initial(self)
@@ -313,7 +314,7 @@ class ReactIfNode(ReactNode):
             else:
                 js_rerender_expression = None
             
-            return js_rerender_expression
+            return js_rerender_expression, hooks
 
     def __init__(self, nodelist: template.NodeList, expression: Expression):
         self.expression = expression
@@ -367,14 +368,11 @@ class ReactPrintNode(ReactNode):
                 # TODO: HTML excaping also after reaction hook, in js
                 return str(val_initial)
 
-        def render_js(self, subtree: List) -> str:
+        def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             val_js, hooks = self.expression.eval_js_and_hooks(self)
-            self.add_hooks(hooks)
-
-            self.parent.add_hooks(self.hooks)
             
             # TODO: HTML escaping?
-            return f'react_print_html({val_js})'
+            return f'react_print_html({val_js})', hooks
 
     def __init__(self, expression: Expression):
         self.expression = expression
@@ -405,7 +403,7 @@ def do_reactprint(parser, token):
 class ReactGetNode(ReactNode):
     tag_name = 'reactget'
 
-    class Context(ReactContext):
+    class Context(ReactRerendableContext):
         def __init__(self, parent, expression: Expression):
             self.expression: Expression = expression
             super().__init__(id='', parent=parent, fully_reactive=False)
@@ -413,10 +411,12 @@ class ReactGetNode(ReactNode):
         def render_html(self, subtree: List) -> str:
             js_expression, hooks = self.expression.eval_js_and_hooks(self)
 
-            if self.parent.need_get_tag_hooks:
-                self.parent.add_hooks(hooks, need_full_reactivity=False)
-
             return mark_safe(js_expression)
+
+        def render_js_and_hooks(self, subtree: List) -> str:
+            js_expression, hooks = self.expression.eval_js_and_hooks(self)
+
+            return js_expression, hooks
 
     def __init__(self, expression: Expression):
         self.expression = expression
@@ -502,7 +502,7 @@ class ReactScriptNode(ReactNode):
 
     class Context(ReactContext):
         def __init__(self, id: str, parent: ReactContext):
-            super().__init__(id=id, parent=parent, fully_reactive=False, need_get_tag_hooks=True)
+            super().__init__(id=id, parent=parent, fully_reactive=False)
     
         def var_js(self, var):
             return f'{var.name}_script{self.id}'
@@ -510,8 +510,10 @@ class ReactScriptNode(ReactNode):
         def render_html(self, subtree: List) -> str:
             script = self.render_html_inside(subtree)
 
+            js_expression, hooks = self.render_js_and_hooks_inside(subtree)
+
             return mark_safe(f'( () => {{ function proc() {{ {script} }} \n' + \
-                '\n'.join((hook.js_attach('proc', False) for hook in self.hooks)) + \
+                '\n'.join((hook.js_attach('proc', False) for hook in hooks)) + \
                 '\n proc(); } )();')
 
     def __init__(self, nodelist: template.NodeList):
