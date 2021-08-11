@@ -79,6 +79,10 @@ class ReactDefNode(ReactNode):
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             self.act()
             return '', []
+        
+        def render_post_script(self, subtree: Optional[List]) -> str:
+            self.act()
+            return ''
     
     def __init__(self, var_name: str, var_val_expression: Expression):
         self.var_name: str = var_name
@@ -119,16 +123,21 @@ class ReactTagNode(ReactNode):
             attribute_str = ' '.join((f'{key}="{escapejs(val)}"' for key, val in self.computed_attributes.items()))
         
             inner_html_output = self.render_html_inside(subtree)
-            self.clear_render()
+
+            return '<' + self.html_tag + (' ' + attribute_str if attribute_str else '') + \
+                '>' + inner_html_output + '</' + self.html_tag + '>'
+        
+        def render_post_script(self, subtree: Optional[List]) -> str:
             js_rerender_expression, hooks = self.render_js_and_hooks_inside(subtree)
             
             script = '( () => { function proc() {' + f'document.getElementById(\'{self.id}\').innerHTML = ' + \
                 js_rerender_expression + ';}\n' + \
                 '\n'.join((hook.js_attach('proc', True) for hook in hooks)) +\
                 '} )();'
-
-            return '<' + self.html_tag + (' ' + attribute_str if attribute_str else '') + \
-                '>' + inner_html_output + '</' + self.html_tag + '>'+ (f'<script>{script}</script>' if hooks else '')
+            
+            self.clear_render()
+            
+            return script + '\n' + self.render_post_script_inside(subtree)
     
     def __init__(self, nodelist, html_tag: str, extra_attributes):
         self.nodelist = nodelist

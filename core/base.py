@@ -66,6 +66,9 @@ class ReactVar(ReactData):
         super().__init__(val)
         self.name: str = name
         self.context: Optional[ReactContext] = None
+    
+    def __repr__(self) -> str:
+        return f"ReactVar(name: {repr(self.name)}, val: {repr(self.val)}, context: {repr(self.context)})"
 
     def js(self) -> str:
         return self.context.var_js(self)
@@ -167,6 +170,29 @@ class ReactContext:
             strings.append(result)
 
         return ''.join(strings)
+
+    def render_post_script(self, subtree: Optional[List]) -> str:
+        return self.render_post_script_inside(subtree)
+
+    def render_post_script_inside(self, subtree: List) -> str:
+        if subtree is None:
+            return ''
+        # otherwise
+
+        scripts: List[str] = []
+        for element in subtree:
+            if isinstance(element, str):
+                continue
+            elif isinstance(element, tuple):
+                context, subsubtree = element
+                
+                result = context.render_post_script(subsubtree)
+            else:
+                raise Exception("All element of the internal subtree must be scripts or pairs of form (ReactContext, subsubtree)!")
+        
+            scripts.append(result)
+
+        return '\n'.join([script for script in scripts if script])
     
     def render_js_and_hooks_inside(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
         js_and_hooks: List[str, Iterable[ReactHook]] = []
@@ -303,10 +329,14 @@ class ReactNode(template.Node):
 
             output = current_context.render_html(subtree)
 
+            current_context.clear_render()
+
+            script = current_context.render_post_script(subtree)
+
             # Recuservly destroy all context in order to help the garbage collector
             current_context.destroy()
 
-            return output
+            return output + (f'<script>{script}</script>' if script else '')
         else:
             tracker: Optional[ReactTracker] = template_context.get(reacttrack_str)
 
