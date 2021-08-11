@@ -79,16 +79,6 @@ class ReactVar(ReactData):
     def js_attach(self, js_callable, invoke_if_changed_from_initial: bool):
         return f'{self.js()}.attach({js_callable}, {value_js_representation(invoke_if_changed_from_initial)});'
 
-
-# TODO: Remove this obsolete interface
-class ReactRerendable:
-    # TODO: Remove finally this method
-    @abstractmethod
-    def render_with_rerender_js(self, template_context: template.Context):
-        """Return a pair of (html_output, rerender_js_expression).
-        All hooks shell be registered manually in the render context."""
-        pass
-
 reactcontext_str = 'reactcontext'
 reacttrack_uuid_str: str = uuid.uuid4().hex
 reacttrack_str = "react_track"
