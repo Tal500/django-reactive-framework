@@ -94,7 +94,7 @@ reacttrack_uuid_str: str = uuid.uuid4().hex
 reacttrack_str = "react_track"
 class ReactTracker:
     def __init__(self):
-        self.childs: List[ReactNode] = []
+        self.children: List[ReactNode] = []
 class ReactContext:
     def __init__(self, id: str, parent: 'ReactContext' = None, fully_reactive: bool = False):
         self.id: str = id
@@ -111,7 +111,7 @@ class ReactContext:
             raise template.TemplateSyntaxError("Can't have a fully reactive child inside a non-full reactive one.")
     
     def destroy(self):
-        """Destroy all childs when done, to help gc avoiding cycle references"""
+        """Destroy all children when done, to help gc avoiding cycle references"""
 
         self.parent = None
         self.vars = None
@@ -248,7 +248,7 @@ class ReactContext:
                         raise template.TemplateSyntaxError("Error in reactive template rendering tracking!")
 
                     node_index = int(render_result[i:j])
-                    node = tracker.childs[node_index]
+                    node = tracker.children[node_index]
                     parse_react_node(node)
 
                     j += len(reacttrack_uuid_str)
@@ -325,8 +325,8 @@ class ReactNode(template.Node):
                     " the reactive tag isn't toplevel but called with render without a tracker!")
             # otherwise
 
-            index = len(tracker.childs)
-            tracker.childs.append(self)
+            index = len(tracker.children)
+            tracker.children.append(self)
 
             return mark_safe(reacttrack_uuid_str + str(index) + reacttrack_uuid_str)
 

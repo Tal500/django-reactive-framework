@@ -535,7 +535,7 @@ def do_reactscript(parser, token):
     # otherwise
 
     # TODO: Forbit puttting reactivescript inside another reactivescript
-    # TODO: Allow only get&set reactive tags as childs, or other non-reactive ones, maybe by using "in_script" field in context?
+    # TODO: Allow only get&set reactive tags as children, or other non-reactive ones, maybe by using "in_script" field in context?
 
     nodelist = parser.parse((ReactScriptNode.tag_name_enclose,))
     parser.delete_first_token()
