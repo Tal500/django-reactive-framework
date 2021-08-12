@@ -144,7 +144,7 @@ class VariableExpression(SettableExpression):
         if var:
             return var.js_get(), [var]
         else:
-            return value_to_expression(''), []
+            return value_to_expression('').eval_js_and_hooks(react_context)
     
     def js_set(self, react_context: Optional[ReactContext], js_expression: str):
         var = self.var(react_context)
