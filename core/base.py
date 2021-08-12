@@ -64,8 +64,6 @@ class ReactData(ReactHook):
         var_val_expr = self.expression.eval_js_and_hooks(react_context)[0] \
             if other_expression is None else other_expression
         
-        print(var_val_expr)
-        
         return f'new ReactVar({var_val_expr})'
 
 class ReactVar(ReactData):
