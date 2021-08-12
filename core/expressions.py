@@ -160,6 +160,13 @@ class VariableExpression(SettableExpression):
             raise template.TemplateSyntaxError('No reactive variable named %s was found' % self.var_name)
 
         return var.js_set(js_expression)
+    
+    @staticmethod
+    def try_parse(expression: str) -> Optional['VariableExpression']:
+        if expression.isidentifier():
+            return VariableExpression(expression)
+        else:
+            return None
 
 def remove_whitespaces_on_boundaries(s: str):
     for i in range(len(s)):
@@ -185,5 +192,7 @@ def parse_expression(expression: str):
         return exp
     elif exp := ArrayExpression.try_parse(expression):
         return exp
+    elif exp := VariableExpression.try_parse(expression):
+        return exp
     else:
-        return VariableExpression(expression)
+        raise template.TemplateSyntaxError(f"Can't parse expression: ({expression})")
