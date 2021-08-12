@@ -49,7 +49,7 @@ class ReactHook:
     def js_attach(self, js_callable, invoke_if_changed_from_initial):
         pass
 
-ReactValType = Union[str, int]
+ReactValType = Union[str, bool, int, List['ReactValType']]
 class ReactData(ReactHook):
     def __init__(self, expression: 'Expression'):
         self.expression = expression
