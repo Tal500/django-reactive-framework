@@ -131,7 +131,7 @@ class ReactTagNode(ReactNode):
             
             script = '( () => { function proc() {' + f'document.getElementById(\'{self.id}\').innerHTML = ' + \
                 js_rerender_expression + ';}\n' + \
-                '\n'.join((hook.js_attach('proc', True) for hook in hooks)) +\
+                '\n'.join((hook.js_attach('proc', True) for hook in set(hooks))) +\
                 '} )();'
             
             self.clear_render()
@@ -228,7 +228,7 @@ class ReactForNode(ReactNode):
             # get all the hooks without iter_var, because that on change the array it's gonna change.
             hooks_inside = filter((iter_var).__ne__, hooks_inside_unfiltered)
             
-            hooks = list(chain(iter_hooks, hooks_inside))
+            hooks = set(chain(iter_hooks, hooks_inside))
 
             if js_section_rerender_expression:
                 def get_def(var: ReactVar, other_expression: Optional[Expression] = None):
@@ -522,7 +522,7 @@ class ReactScriptNode(ReactNode):
             js_expression, hooks = self.render_js_and_hooks_inside(subtree)
 
             return mark_safe(f'( () => {{ function proc() {{ {script} }} \n' + \
-                '\n'.join((hook.js_attach('proc', False) for hook in hooks)) + \
+                '\n'.join((hook.js_attach('proc', False) for hook in set(hooks))) + \
                 '\n proc(); } )();')
 
     def __init__(self, nodelist: template.NodeList):
