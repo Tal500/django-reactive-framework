@@ -40,6 +40,13 @@ class StringExpression(Expression):
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
         return f"'{self.val}'", []
+    
+    @staticmethod
+    def try_parse(expression: str) -> Optional['StringExpression']:
+        if len(expression) >= 2 and expression[0] == expression[-1] and (expression[0] == "'" or expression[0] == "'"):
+            return StringExpression(expression[1:-1])# TODO: escape characters!
+        else:
+            return None
 
 class IntExpression(Expression):
     def __init__(self, val: int):
@@ -184,8 +191,8 @@ def parse_expression(expression: str):
 
     # TODO: Support much more, and int expression (use regular expression?)
     
-    if len(expression) >= 2 and expression[0] == expression[-1] and (expression[0] == "'" or expression[0] == "'"):
-        return StringExpression(expression[1:-1])# TODO: escape characters!
+    if exp := StringExpression.try_parse(expression):
+        return exp
     elif exp := BoolExpression.try_parse(expression):
         return exp
     elif exp := IntExpression.try_parse(expression):
