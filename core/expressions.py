@@ -53,6 +53,13 @@ class IntExpression(Expression):
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
         return str(self.val), []
+    
+    @staticmethod
+    def try_parse(expression: str) -> Optional['IntExpression']:
+        if expression.isnumeric():
+            return IntExpression(int(expression))
+        else:
+            return None
 
 class BoolExpression(Expression):
     def __init__(self, val: bool):
@@ -68,7 +75,7 @@ class BoolExpression(Expression):
         return 'true' if self.val else 'false', []
     
     @staticmethod
-    def try_parse(expression: str) -> Optional[bool]:
+    def try_parse(expression: str) -> Optional['BoolExpression']:
         if expression == 'True' or expression == 'true':
             return BoolExpression(True)
         elif expression == 'False' or expression == 'false':
@@ -98,7 +105,7 @@ class ArrayExpression(Expression):
         return f'[{",".join((expression for expression in js_expressions))}]', all_hooks
     
     @staticmethod
-    def try_parse(expression: str) -> Optional[List]:
+    def try_parse(expression: str) -> Optional['ArrayExpression']:
         if not (len(expression) >= 2 and expression[0] == '[' and expression[-1]==']'):
             return None
         # otherwise
@@ -173,6 +180,8 @@ def parse_expression(expression: str):
     if len(expression) >= 2 and expression[0] == expression[-1] and (expression[0] == "'" or expression[0] == "'"):
         return StringExpression(expression[1:-1])# TODO: escape characters!
     elif exp := BoolExpression.try_parse(expression):
+        return exp
+    elif exp := IntExpression.try_parse(expression):
         return exp
     elif exp := ArrayExpression.try_parse(expression):
         return exp
