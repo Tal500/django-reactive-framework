@@ -5,6 +5,8 @@ from django import template
 
 from ..core.base import ReactContext, ReactValType, ReactHook, ReactVar, value_to_expression
 
+common_delimiters = [('(', ')'), ('[', ']'), ('{', '}')]
+
 def match_and_return_second(char: str, pairs: List[Tuple[str, str]]):
     for first, second in pairs:
         if char == first:
@@ -58,6 +60,11 @@ class SettableExpression(Expression):
     @abstractmethod
     def js_set(self, react_context: Optional[ReactContext], js_expression: str) -> str:
         """ Return the js expression for setting the self expression to the js_expression"""
+        pass
+
+    @abstractmethod
+    def js_notify(self, react_context: Optional[ReactContext]) -> str:
+        """ Return the js expression for notifying the self expression"""
         pass
 
 class StringExpression(Expression):
@@ -172,7 +179,7 @@ class ArrayExpression(Expression):
         expression = expression[1:-1]
 
         # TODO: Handle split by ',' inside string literal, etc.
-        parts = smart_split(expression, ',', [('[', ']'), ('{', '}')])
+        parts = smart_split(expression, ',', common_delimiters)
 
         return ArrayExpression([parse_expression(part) for part in parts])
 
@@ -209,7 +216,7 @@ class DictExpression(Expression):
         expression = expression[1:-1]
 
         # TODO: Handle split by ',' inside string literal, etc.
-        parts = smart_split(expression, ',', [('[', ']'), ('{', '}')])
+        parts = smart_split(expression, ',', common_delimiters)
 
         def split_part(part: str) -> Tuple[str, Expression]:
             seperator = part.find(':')
@@ -233,6 +240,9 @@ class VariableExpression(SettableExpression):
     def __init__(self, var_name):
         assert(" " not in var_name)
         self.var_name = var_name
+    
+    def __str__(self):
+        return self.var_name
     
     def reduce(self, template_context: template.Context):
         if self.var_name in template_context:
@@ -273,12 +283,99 @@ class VariableExpression(SettableExpression):
 
         return var.js_set(js_expression)
     
+    def js_notify(self, react_context: Optional[ReactContext]) -> str:
+        var = self.var(react_context)
+
+        if var is None:
+            raise template.TemplateSyntaxError('No reactive variable named %s was found' % self.var_name)
+
+        return var.js_notify()
+    
     @staticmethod
     def try_parse(expression: str) -> Optional['VariableExpression']:
         if expression.isidentifier():
             return VariableExpression(expression)
         else:
             return None
+
+class PropertyExpression(Expression):
+    def __init__(self, root_expression: Expression, key_path: List[str]):
+        # TODO: Support both by "." and []
+
+        assert(key_path)
+
+        self.root_expression: Expression = root_expression
+        self.key_path: List[str] = key_path
+    
+    def __str__(self):
+        return str(self.root_expression) + '.' + '.'.join(self.key_path)
+    
+    def __repr__(self) -> str:
+        return f'{super().__repr__()}({self})'
+    
+    def reduce(self, template_context: template.Context):
+        root_expression_reduced = self.root_expression.reduce(template_context)
+        
+        return PropertyExpression(root_expression_reduced, self.key_path)
+    
+    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+        root_val = self.root_expression.eval_initial(react_context)
+
+        current: ReactValType = root_val
+
+        for key in self.key_path:
+            if key in current:
+                current = current[key]
+            else:
+                raise template.TemplateSyntaxError(f"Error while parsing expression {self}: " +\
+                    "There is no key named {key} in {current}")
+
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+        root_var_js, hooks = self.root_expression.eval_js_and_hooks(react_context)
+
+        return root_var_js + '.' + '.'.join(self.key_path), hooks
+    
+    @staticmethod
+    def try_parse(expression: str) -> Optional['PropertyExpression']:
+        parts = list(smart_split(expression, '.', common_delimiters))
+
+        if len(parts) <= 1:
+            return None
+        # otherwise
+
+        root_expression = parse_expression(parts[0])
+        if root_expression is None:
+            return None
+        # otherwise
+
+        key_path = parts[1:]
+        for key in key_path:
+            if key is None or (not key.isidentifier()):
+                return None
+        # otherwise
+        
+        if isinstance(root_expression, SettableExpression):
+            return SettablePropertyExpression(root_expression, key_path)
+        else:
+            return PropertyExpression(root_expression, key_path)
+
+class SettablePropertyExpression(PropertyExpression, SettableExpression):
+    def __init__(self, root_expression: SettableExpression, key_path: List[str]):
+        super().__init__(root_expression, key_path)
+    
+    def reduce(self, template_context: template.Context):
+        root_expression_reduced = self.root_expression.reduce(template_context)
+        
+        return SettablePropertyExpression(root_expression_reduced, self.key_path)
+    
+    def js_set(self, react_context: Optional[ReactContext], js_expression: str):
+        js_path_expression = self.eval_js_and_hooks(react_context)[0]
+
+        return f'{js_path_expression} = {js_expression}; ' + self.js_notify(react_context)
+    
+    def js_notify(self, react_context: Optional[ReactContext]) -> str:
+        settable_expression: SettableExpression = self.root_expression
+        return settable_expression.js_notify(react_context)
 
 def remove_whitespaces_on_boundaries(s: str):
     for i in range(len(s)):
@@ -309,6 +406,8 @@ def parse_expression(expression: str):
     elif exp := DictExpression.try_parse(expression):
         return exp
     elif exp := VariableExpression.try_parse(expression):
+        return exp
+    elif exp := PropertyExpression.try_parse(expression):
         return exp
     else:
         raise template.TemplateSyntaxError(f"Can't parse expression: ({expression})")

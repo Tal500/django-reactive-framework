@@ -136,6 +136,11 @@ setTimeout(
     {% reactset test_json %}
     {% reactget test_json %}
     {% endreactset %}
+    
+    setTimeout(
+        function() {
+        {% reactset test_json.v7 %}4{% endreactset %}
+        }, 1000);
     }, 1200);
 </script>
 

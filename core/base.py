@@ -90,6 +90,9 @@ class ReactVar(ReactData):
     
     def js_attach(self, js_callable, invoke_if_changed_from_initial: bool):
         return f'{self.js()}.attach({js_callable}, {value_js_representation(invoke_if_changed_from_initial)});'
+    
+    def js_notify(self):
+        return f'{self.js()}.notify();'
 
 reactcontext_str = 'reactcontext'
 reacttrack_uuid_str: str = uuid.uuid4().hex

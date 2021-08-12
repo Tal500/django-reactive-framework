@@ -12,6 +12,15 @@ class ReactVar {
             cb();
     }
 
+    notify() {
+        this.changed_from_initial = true;
+
+        for (var i = 0; i < this.attached.length; ++i) {
+            const cb = this.attached[i]
+            cb();
+        }
+    }
+
     get val() {
         return this._val;
     }
@@ -19,12 +28,7 @@ class ReactVar {
     set val(new_val) {
         if (this.val !== new_val || (new_val && new_val.constructor == Object)) {
             this._val = new_val;
-            this.changed_from_initial = true;
-
-            for (var i = 0; i < this.attached.length; ++i) {
-                const cb = this.attached[i]
-                cb();
-            }
+            this.notify();
         }
     }
 }
