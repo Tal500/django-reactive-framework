@@ -119,6 +119,26 @@ Even None is supported:
 </ul>
 {% endreacttag %}
 
+{% reactdef test_json {v1:'2','v7':'3',nested:{A:1,B:2},arr:[{a:1,b:2},{c:3}]} %}
+
+{% reacttag section %}
+You can also use JSON/dictionary values:
+<p>
+{% reactprint test_json %}
+</p>
+{% endreacttag %}
+
+<script>
+setTimeout(
+    function() {
+    {% reactget test_json %}.v10 = 5
+
+    {% reactset test_json %}
+    {% reactget test_json %}
+    {% endreactset %}
+    }, 1200);
+</script>
+
 {% endreactblock %}
 {% endreactblock %}
 

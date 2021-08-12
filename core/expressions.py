@@ -1,9 +1,41 @@
 from abc import abstractmethod
-from typing import List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
 from django import template
 
 from ..core.base import ReactContext, ReactValType, ReactHook, ReactVar, value_to_expression
+
+def match_and_return_second(char: str, pairs: List[Tuple[str, str]]):
+    for first, second in pairs:
+        if char == first:
+            return second
+    # otherwise
+
+    return None
+
+# TODO: Handle correct string parsing, and raise exception on syntax error?
+def smart_split(expression: str, seperator: str, delimiters: List[Tuple[str, str]]) -> Iterator[str]:
+    i = 0
+    loc = 0
+
+    end_delimiters_stack = []
+
+    for loc, char in enumerate(expression):
+        if len(end_delimiters_stack) == 0:
+            if char == seperator and len(end_delimiters_stack) == 0:
+                yield expression[i:loc]
+                i = loc + 1
+                continue
+        else:
+            if char == end_delimiters_stack[len(end_delimiters_stack) - 1]:
+                end_delimiters_stack.pop()
+                continue
+        # otherwise
+
+        if end_delimiter := match_and_return_second(char, delimiters):
+            end_delimiters_stack.append(end_delimiter)\
+
+    yield expression[i:]
 
 class Expression:
     """ An immutable structure for holding expressions. """
@@ -140,9 +172,62 @@ class ArrayExpression(Expression):
         expression = expression[1:-1]
 
         # TODO: Handle split by ',' inside string literal, etc.
-        parts = expression.split(',')
+        parts = smart_split(expression, ',', [('[', ']'), ('{', '}')])
 
         return ArrayExpression([parse_expression(part) for part in parts])
+
+class DictExpression(Expression):
+    def __init__(self, dict_expression: Dict[str, Expression]):
+        self.dict_expression = dict_expression
+    
+    def __repr__(self) -> str:
+        return f'{super().__repr__()}{{{",".join((f"{key}:{repr(expression)}" for key, expression in self.dict_expression.items()))}}}'
+    
+    def reduce(self, template_context: template.Context):
+        return DictExpression({key: expression.reduce(template_context) for key, expression in self.dict_expression.items()})
+    
+    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+        return {key: expression.eval_initial(react_context) for key, expression in self.dict_expression.items()}
+
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+        key_js_expressions, all_hooks = [], []
+
+        for key, expression in self.dict_expression.items():
+            js_expression, hooks = expression.eval_js_and_hooks(react_context)
+
+            key_js_expressions.append((key, js_expression))
+            all_hooks.extend(hooks)
+        
+        return f'{{{",".join((f"{key}:{expression}" for key, expression in key_js_expressions))}}}', all_hooks
+    
+    @staticmethod
+    def try_parse(expression: str) -> Optional['DictExpression']:
+        if not (len(expression) >= 2 and expression[0] == '{' and expression[-1]=='}'):
+            return None
+        # otherwise
+
+        expression = expression[1:-1]
+
+        # TODO: Handle split by ',' inside string literal, etc.
+        parts = smart_split(expression, ',', [('[', ']'), ('{', '}')])
+
+        def split_part(part: str) -> Tuple[str, Expression]:
+            seperator = part.find(':')
+            if seperator == -1:
+                raise template.TemplateSyntaxError("Can't find key-value seperator ':'")
+
+            key = part[:seperator]
+            val_str = part[seperator+1:]
+
+            if key_expression := StringExpression.try_parse(key):
+                key = key_expression.val
+
+            return key, parse_expression(val_str)
+
+        try:
+            return DictExpression(dict(split_part(part) for part in parts))
+        except:
+            return None
 
 class VariableExpression(SettableExpression):
     def __init__(self, var_name):
@@ -220,6 +305,8 @@ def parse_expression(expression: str):
     elif exp := NoneExpression.try_parse(expression):
         return exp
     elif exp := ArrayExpression.try_parse(expression):
+        return exp
+    elif exp := DictExpression.try_parse(expression):
         return exp
     elif exp := VariableExpression.try_parse(expression):
         return exp

@@ -35,6 +35,8 @@ def value_to_expression(val):
         return NoneExpression()
     elif isinstance(val, list):
         return ArrayExpression([value_to_expression(element) for element in val])
+    elif isinstance(val, dict):
+        return DictExpression({str(key): value_to_expression(_val) for key, _val in val.items()})
     else:
         raise template.TemplateSyntaxError(
             "Currently the only types supported are string, bool and int for reactive variables values.")
@@ -51,7 +53,7 @@ class ReactHook:
     def js_attach(self, js_callable, invoke_if_changed_from_initial):
         pass
 
-ReactValType = Union[str, bool, int, None, List['ReactValType']]
+ReactValType = Union[str, bool, int, None, List['ReactValType'], Dict[str, 'ReactValType']]
 class ReactData(ReactHook):
     def __init__(self, expression: 'Expression'):
         self.expression = expression
