@@ -109,6 +109,16 @@ value: {% reactprint element %}
 </ul>
 {% endreacttag %}
 
+{% reacttag section %}
+Even None is supported:
+{% reactdef test_none None %}
+{% reactdef test_null null %}
+<ul>
+<li>{% reactprint test_none %}</li>
+<li>{% reactprint test_null %}</li>
+</ul>
+{% endreacttag %}
+
 {% endreactblock %}
 {% endreactblock %}
 

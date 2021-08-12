@@ -90,6 +90,26 @@ class BoolExpression(Expression):
         else:
             return None
 
+class NoneExpression(Expression):
+    def __init__(self):
+        pass
+    
+    def reduce(self, template_context: template.Context):
+        return self
+    
+    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+        return None
+
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+        return 'null', []
+    
+    @staticmethod
+    def try_parse(expression: str) -> Optional['NoneExpression']:
+        if expression == 'None' or expression == 'null':
+            return NoneExpression()
+        else:
+            return None
+
 class ArrayExpression(Expression):
     def __init__(self, elements_expression: List[Expression]):
         self.elements_expression = elements_expression
@@ -196,6 +216,8 @@ def parse_expression(expression: str):
     elif exp := BoolExpression.try_parse(expression):
         return exp
     elif exp := IntExpression.try_parse(expression):
+        return exp
+    elif exp := NoneExpression.try_parse(expression):
         return exp
     elif exp := ArrayExpression.try_parse(expression):
         return exp

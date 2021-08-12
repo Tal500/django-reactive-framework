@@ -31,6 +31,8 @@ def value_to_expression(val):
         return BoolExpression(val)
     elif isinstance(val, int):
         return IntExpression(val)
+    elif val is None:
+        return NoneExpression()
     elif isinstance(val, list):
         return ArrayExpression([value_to_expression(element) for element in val])
     else:
@@ -49,7 +51,7 @@ class ReactHook:
     def js_attach(self, js_callable, invoke_if_changed_from_initial):
         pass
 
-ReactValType = Union[str, bool, int, List['ReactValType']]
+ReactValType = Union[str, bool, int, None, List['ReactValType']]
 class ReactData(ReactHook):
     def __init__(self, expression: 'Expression'):
         self.expression = expression
