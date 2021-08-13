@@ -10,17 +10,22 @@ from django.utils.safestring import mark_safe
 
 count_str = 'react_currect_count'
 count_reactcontent_str = 'currect_reactcontent_count'
+
+# TODO: Remove this method
 def next_id(context: template.Context, reactcontent = None) -> int:
     if reactcontent is None:
         revelant_str = count_reactcontent_str
     else:
         revelant_str = count_str
 
-    if not context.get(revelant_str):
-        context[revelant_str] = 0
+    return next_id_by_context(context, revelant_str)
+
+def next_id_by_context(context: template.Context, type_identifier: str) -> int:
+    if not context.get(type_identifier):
+        context[type_identifier] = 0
     
-    currect = context[revelant_str]
-    context[revelant_str] = currect + 1
+    currect = context[type_identifier]
+    context[type_identifier] = currect + 1
 
     return currect
 
@@ -50,11 +55,15 @@ def value_js_representation(val):
 
 class ReactHook:
     @abstractmethod
-    def js_attach(self, js_callable: str, invoke_if_changed_from_initial: bool):
+    def get_name(self) -> str:
         pass
 
     @abstractmethod
-    def js_detach(self, js_attachment: str):
+    def js_attach(self, js_callable: str, invoke_if_changed_from_initial: bool) -> str:
+        pass
+
+    @abstractmethod
+    def js_detach(self, js_attachment: str) -> str:
         pass
 
 ReactValType = Union[str, bool, int, None, List['ReactValType'], Dict[str, 'ReactValType']]
@@ -83,6 +92,9 @@ class ReactVar(ReactData):
     def __repr__(self) -> str:
         return f"ReactVar(name: {repr(self.name)}, expression: {repr(self.expression)}, context: {repr(self.context)})"
 
+    def get_name(self) -> str:
+        return self.name
+
     def js(self) -> str:
         return self.context.var_js(self)
     
@@ -93,13 +105,47 @@ class ReactVar(ReactData):
         return self.js() + ".val = (" + js_expression + ");"
     
     def js_attach(self, js_callable: str, invoke_if_changed_from_initial: bool):
-        return f'{self.js()}.attach({js_callable}, {value_js_representation(invoke_if_changed_from_initial)});'
+        return f'{self.js()}.attach({js_callable}, {value_js_representation(invoke_if_changed_from_initial)})'
 
     def js_detach(self, js_attachment: str):
         return f'{self.js()}.detach({js_attachment});'
     
     def js_notify(self):
         return f'{self.js()}.notify();'
+
+class NativeReactVar(ReactVar):
+    def __init__(self, name: str, react_expression: 'Expression'):
+        super().__init__(name, react_expression)
+    
+    def initial_val_js(self, react_context: 'ReactContext', other_expression: str = None):
+        var_val_expr = value_js_representation(self.expression.eval_initial(react_context)) \
+            if other_expression is None else other_expression
+        
+        return f'({var_val_expr})'
+    
+    def reactive_val_js(self, react_context: 'ReactContext', other_expression: str = None):
+        var_val_expr = self.expression.eval_js_and_hooks(react_context)[0] \
+            if other_expression is None else other_expression
+        
+        return f'({var_val_expr})'
+    
+    def js(self) -> str:
+        return self.name
+    
+    def js_get(self) -> str:
+        return self.js()
+    
+    def js_set(self, js_expression: str) -> str:
+        return self.js() + " = (" + js_expression + ");"
+    
+    def js_attach(self, js_callable: str, invoke_if_changed_from_initial: bool):
+        raise Exception("Reactive internal error: Can't call js_attach on NativeReactVar")
+
+    def js_detach(self, js_attachment: str):
+        raise Exception("Reactive internal error: Can't call js_detach on NativeReactVar")
+    
+    def js_notify(self):
+        raise Exception("Reactive internal error: Can't call js_notify on NativeReactVar")
 
 class ResorceScript:
     def __init__(self, initial_pre_calc: str = '', initial_post_calc: str = '', destructor: str = ''):
@@ -385,10 +431,10 @@ class ReactNode(template.Node):
             # Recuservly destroy all context in order to help the garbage collector
             current_context.destroy()
 
+            # Notice that we're intentionally don't print here script.dectruct
             return output + ('<script>\n' + \
                 f'( () => {{ {script.initial_pre_calc} }} )();\n' + \
                 f'( () => {{ {script.initial_post_calc} }} )();\n' + \
-                f'( () => {{ {script.destructor} }} )();\n' + \
                 '</script>' if script else '')
         else:
             tracker: Optional[ReactTracker] = template_context.get(reacttrack_str)

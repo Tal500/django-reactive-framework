@@ -7,8 +7,8 @@ from django.utils.html import escapejs
 from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
-from ..core.base import ReactHook, ReactRerenderableContext, ReactVar, ReactContext, ReactNode, ResorceScript, next_id, value_to_expression
-from ..core.expressions import Expression, SettableExpression, parse_expression
+from ..core.base import NativeReactVar, ReactHook, ReactRerenderableContext, ReactVar, ReactContext, ReactNode, ResorceScript, next_id, next_id_by_context, value_to_expression
+from ..core.expressions import ArrayExpression, DictExpression, Expression, SettableExpression, parse_expression
 
 register = template.Library()
 
@@ -112,8 +112,9 @@ class ReactTagNode(ReactNode):
     class RenderData(ReactContext):
         def __init__(self, parent: ReactContext, id: str, html_tag: str, computed_attributes: Dict[str, Any]):
             super().__init__(id=id, parent=parent, fully_reactive=True)
-            self.html_tag = html_tag
+            self.html_tag: str = html_tag
             self.computed_attributes: Dict[str, Any] = computed_attributes
+            self.control_var_name: str = f'__react_control_{id}'
     
         def var_js(self, var):
             return f'{var.name}_tag{self.id}'
@@ -123,6 +124,9 @@ class ReactTagNode(ReactNode):
         
             inner_html_output = self.render_html_inside(subtree)
 
+            control_var = NativeReactVar(self.control_var_name, value_to_expression(dict()))
+            self.add_var(control_var)
+
             return '<' + self.html_tag + (' ' + attribute_str if attribute_str else '') + \
                 '>' + inner_html_output + '</' + self.html_tag + '>'
         
@@ -131,12 +135,20 @@ class ReactTagNode(ReactNode):
             
             self.clear_render()
 
-            js_rerender_expression, hooks = self.render_js_and_hooks_inside(subtree)
+            js_rerender_expression, _hooks = self.render_js_and_hooks_inside(subtree)
+
+            hooks = set(_hooks)
+
+            control_var = NativeReactVar(self.control_var_name, None)
             
             script.initial_post_calc = '( () => { function proc() {' + f'document.getElementById(\'{self.id}\').innerHTML = ' + \
                 js_rerender_expression + ';}\n' + \
-                '\n'.join((hook.js_attach('proc', True) for hook in set(hooks))) +\
-                '} )();\n' + script.initial_post_calc
+                '\n'.join((f'{self.control_var_name}.attachment_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
+                '\n' + script.initial_post_calc + '} )();'
+            
+            script.destructor = '( () => {' + \
+                '\n'.join((hook.js_detach(f'{self.control_var_name}.attachment_{hook.get_name()}') for hook in hooks)) + \
+                '\n' + script.destructor + '} )();'
             
             return script
     
@@ -153,8 +165,8 @@ class ReactTagNode(ReactNode):
 
         id = computed_attributes.get('id')
         if id is None:
-            local_id = next_id(template_context)#, react_context)
-            id = f'react_html_tag_{parent_context.id}_{local_id}'
+            local_id = next_id_by_context(template_context, '__react_tag')
+            id = f'react_html_tag_{local_id}'
             computed_attributes['id'] = id
 
         return ReactTagNode.RenderData(parent_context, id, self.html_tag, computed_attributes)
@@ -524,7 +536,7 @@ class ReactScriptNode(ReactNode):
             js_expression, hooks = self.render_js_and_hooks_inside(subtree)
 
             return mark_safe(f'( () => {{ function proc() {{ {script} }} \n' + \
-                '\n'.join((hook.js_attach('proc', False) for hook in set(hooks))) + \
+                '\n'.join((hook.js_attach('proc', False) + ';' for hook in set(hooks))) + \
                 '\n proc(); } )();')
 
     def __init__(self, nodelist: template.NodeList):

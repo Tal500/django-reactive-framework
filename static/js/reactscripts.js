@@ -25,7 +25,7 @@ class DoublyLinkedList {
             newNode.prev = this.tail;
             this.tail = newNode;
         }
-        return this;
+        return newNode;
     }
 
     remove_node(node) {
