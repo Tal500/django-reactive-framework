@@ -50,7 +50,11 @@ def value_js_representation(val):
 
 class ReactHook:
     @abstractmethod
-    def js_attach(self, js_callable, invoke_if_changed_from_initial):
+    def js_attach(self, js_callable: str, invoke_if_changed_from_initial: bool):
+        pass
+
+    @abstractmethod
+    def js_detach(self, js_attachment: str):
         pass
 
 ReactValType = Union[str, bool, int, None, List['ReactValType'], Dict[str, 'ReactValType']]
@@ -88,8 +92,11 @@ class ReactVar(ReactData):
     def js_set(self, js_expression: str) -> str:
         return self.js() + ".val = (" + js_expression + ");"
     
-    def js_attach(self, js_callable, invoke_if_changed_from_initial: bool):
+    def js_attach(self, js_callable: str, invoke_if_changed_from_initial: bool):
         return f'{self.js()}.attach({js_callable}, {value_js_representation(invoke_if_changed_from_initial)});'
+
+    def js_detach(self, js_attachment: str):
+        return f'{self.js()}.detach({js_attachment});'
     
     def js_notify(self):
         return f'{self.js()}.notify();'
