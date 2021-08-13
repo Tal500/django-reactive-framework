@@ -94,6 +94,22 @@ class ReactVar(ReactData):
     def js_notify(self):
         return f'{self.js()}.notify();'
 
+class ResorceScript:
+    def __init__(self, initial_pre_calc: str = '', initial_post_calc: str = '', destructor: str = ''):
+        self.initial_pre_calc: str = initial_pre_calc
+        self.initial_post_calc: str = initial_post_calc
+        self.destructor: str = destructor
+    
+    def prepend(self, pre_script: str) -> 'ResorceScript':
+        if pre_script:
+            return ResorceScript(
+                initial_pre_calc = pre_script + '\n' + self.initial_pre_calc,
+                initial_post_calc = pre_script + '\n' + self.initial_post_calc,
+                destructor = pre_script + '\n' + self.destructor,
+            )
+        else:
+            return self
+
 reactcontext_str = 'reactcontext'
 reacttrack_uuid_str: str = uuid.uuid4().hex
 reacttrack_str = "react_track"
@@ -183,28 +199,42 @@ class ReactContext:
 
         return ''.join(strings)
 
-    def render_post_script(self, subtree: Optional[List]) -> str:
-        return self.render_post_script_inside(subtree)
+    def render_script(self, subtree: Optional[List]) -> ResorceScript:
+        return self.render_script_inside(subtree)
 
-    def render_post_script_inside(self, subtree: List) -> str:
+    def render_script_inside(self, subtree: List) -> ResorceScript:
         if subtree is None:
-            return ''
+            return ResorceScript()
         # otherwise
 
-        scripts: List[str] = []
+        initial_pre_calc_scripts: List[str] = []
+        initial_post_calc_scripts: List[str] = []
+        destructor_scripts: List[str] = []
+
         for element in subtree:
             if isinstance(element, str):
                 continue
             elif isinstance(element, tuple):
                 context, subsubtree = element
                 
-                result = context.render_post_script(subsubtree)
+                result: ResorceScript = context.render_script(subsubtree)
+
+                if result.initial_pre_calc:
+                    initial_pre_calc_scripts.append(f'( () => {{ {result.initial_pre_calc} }} )();')
+
+                if result.initial_post_calc:
+                    initial_post_calc_scripts.append(f'( () => {{ {result.initial_post_calc} }} )();')
+
+                if result.destructor:
+                    destructor_scripts.append(f'( () => {{ {result.destructor} }} )();')
             else:
                 raise Exception("All element of the internal subtree must be scripts or pairs of form (ReactContext, subsubtree)!")
-        
-            scripts.append(result)
 
-        return '\n'.join([script for script in scripts if script])
+        return ResorceScript(
+            initial_pre_calc = '\n'.join(initial_pre_calc_scripts),
+            initial_post_calc = '\n'.join(initial_post_calc_scripts),
+            destructor = '\n'.join(destructor_scripts),
+        )
     
     def render_js_and_hooks_inside(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
         js_and_hooks: List[str, Iterable[ReactHook]] = []
@@ -343,12 +373,16 @@ class ReactNode(template.Node):
 
             current_context.clear_render()
 
-            script = current_context.render_post_script(subtree)
+            script = current_context.render_script(subtree)
 
             # Recuservly destroy all context in order to help the garbage collector
             current_context.destroy()
 
-            return output + (f'<script>{script}</script>' if script else '')
+            return output + ('<script>\n' + \
+                f'( () => {{ {script.initial_pre_calc} }} )();\n' + \
+                f'( () => {{ {script.initial_post_calc} }} )();\n' + \
+                f'( () => {{ {script.destructor} }} )();\n' + \
+                '</script>' if script else '')
         else:
             tracker: Optional[ReactTracker] = template_context.get(reacttrack_str)
 

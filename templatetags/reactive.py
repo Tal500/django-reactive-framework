@@ -7,7 +7,7 @@ from django.utils.html import escapejs
 from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
-from ..core.base import ReactHook, ReactRerenderableContext, ReactVar, ReactContext, ReactNode, next_id, value_to_expression
+from ..core.base import ReactHook, ReactRerenderableContext, ReactVar, ReactContext, ReactNode, ResorceScript, next_id, value_to_expression
 from ..core.expressions import Expression, SettableExpression, parse_expression
 
 register = template.Library()
@@ -79,9 +79,9 @@ class ReactDefNode(ReactNode):
             self.act()
             return '', []# TODO: Return a hook for all hooks in the expression?
         
-        def render_post_script(self, subtree: Optional[List]) -> str:
+        def render_script(self, subtree: Optional[List]) -> ResorceScript:
             self.act()
-            return ''
+            return ResorceScript()
     
     def __init__(self, var_name: str, var_val_expression: Expression):
         self.var_name: str = var_name
@@ -126,17 +126,19 @@ class ReactTagNode(ReactNode):
             return '<' + self.html_tag + (' ' + attribute_str if attribute_str else '') + \
                 '>' + inner_html_output + '</' + self.html_tag + '>'
         
-        def render_post_script(self, subtree: Optional[List]) -> str:
-            js_rerender_expression, hooks = self.render_js_and_hooks_inside(subtree)
-            
-            script = '( () => { function proc() {' + f'document.getElementById(\'{self.id}\').innerHTML = ' + \
-                js_rerender_expression + ';}\n' + \
-                '\n'.join((hook.js_attach('proc', True) for hook in set(hooks))) +\
-                '} )();'
+        def render_script(self, subtree: Optional[List]) -> str:
+            script = self.render_script_inside(subtree)
             
             self.clear_render()
+
+            js_rerender_expression, hooks = self.render_js_and_hooks_inside(subtree)
             
-            return script + '\n' + self.render_post_script_inside(subtree)
+            script.initial_post_calc = '( () => { function proc() {' + f'document.getElementById(\'{self.id}\').innerHTML = ' + \
+                js_rerender_expression + ';}\n' + \
+                '\n'.join((hook.js_attach('proc', True) for hook in set(hooks))) +\
+                '} )();\n' + script.initial_post_calc
+            
+            return script
     
     def __init__(self, nodelist, html_tag: str, extra_attributes):
         self.nodelist = nodelist
