@@ -49,11 +49,15 @@ class ReactVar {
     }
 
     attach(cb, invoke_if_changed_from_initial) {
-        var attachment = this.attached.push(cb);
+        const attachment = this.attached.push(cb);
         if (this.changed_from_initial && invoke_if_changed_from_initial)
             cb();
         
         return attachment;
+    }
+
+    detach(attachment) {
+        this.attached.remove_node(attachment)
     }
 
     notify() {
