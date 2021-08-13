@@ -7,7 +7,7 @@ from django.utils.html import escapejs
 from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
-from ..core.base import NativeReactVar, ReactHook, ReactRerenderableContext, ReactVar, ReactContext, ReactNode, ResorceScript, next_id, next_id_by_context, value_to_expression
+from ..core.base import NativeReactVar, ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id, next_id_by_context, value_to_expression
 from ..core.expressions import ArrayExpression, DictExpression, Expression, SettableExpression, parse_expression
 
 register = template.Library()
@@ -138,11 +138,12 @@ class ReactTagNode(ReactNode):
             js_rerender_expression, _hooks = self.render_js_and_hooks_inside(subtree)
 
             hooks = set(_hooks)
-
-            control_var = NativeReactVar(self.control_var_name, None)
             
-            script.initial_post_calc = '( () => { function proc() {' + f'document.getElementById(\'{self.id}\').innerHTML = ' + \
-                js_rerender_expression + ';}\n' + \
+            script.initial_post_calc = '( () => { function proc() {' + \
+                script.destructor + \
+                f'document.getElementById(\'{self.id}\').innerHTML = ' + js_rerender_expression + ';' + \
+                script.initial_pre_calc + \
+                ';}\n' + \
                 '\n'.join((f'{self.control_var_name}.attachment_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
                 '\n' + script.initial_post_calc + '} )();'
             
@@ -204,14 +205,20 @@ class ReactForNode(ReactNode):
         def __init__(self, id: str, parent: ReactContext, var_name: str, iter_expression: Expression):
             self.var_name: str = var_name
             self.iter_expression: Expression = iter_expression
+            self.control_var_name: str = f'__react_control_{id}'
             super().__init__(id=id, parent=parent, fully_reactive=True)
     
         def var_js(self, var):
             return f'{var.name}_for{self.id}'
         
         def vars_needed_decleration(self):
-            # All loop varaibles shell be local
-            return []
+            # All loop varaibles shell be local, except from the control var
+            control_var = self.search_var(self.control_var_name)
+
+            if control_var:
+                return [control_var]
+            else:
+                return []
 
         def render_html(self, subtree: List) -> str:
             iter_val_initial = self.iter_expression.eval_initial(self)
@@ -219,17 +226,37 @@ class ReactForNode(ReactNode):
             if not isinstance(iter_val_initial, list):
                 raise template.TemplateSyntaxError("Can't loop through non-list value!")
 
-            html_outputs = []
+            data: List[Dict[str, ReactValType]] = []
+            html_outputs: List[str] = []
             for element_val in iter_val_initial:
+                self.compute_initial = True
+                
                 iter_var = ReactVar(self.var_name, value_to_expression(element_val))
                 self.add_var(iter_var)
+
+                print('iter_var', iter_var)
 
                 html_output = self.render_html_inside(subtree)
                 html_outputs.append(html_output)
 
+                vars = list(filter((iter_var).__ne__, super().vars_needed_decleration()))
+
+                iter_data: Dict[str, ReactValType] = {('var_' + var.name): var for var in vars}
+
+                data.append(iter_data)
+
                 self.clear_render()
             
+            control_var = NativeReactVar(self.control_var_name, value_to_expression(data))
+            
+            self.add_var(control_var)
+            
             return ''.join(html_outputs)
+        
+        
+        def get_def(self, var: ReactVar, other_expression: Optional[str] = None):
+            return f'const {var.js()} = ' + \
+                f'{(self.control_var_name + "[i].var_" + var.name) if (other_expression is None) else other_expression};'
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             iter_val_js, iter_hooks = self.iter_expression.eval_js_and_hooks(self)
@@ -245,27 +272,66 @@ class ReactForNode(ReactNode):
             hooks = set(chain(iter_hooks, hooks_inside))
 
             if js_section_rerender_expression:
-                def get_def(var: ReactVar, other_expression: Optional[Expression] = None):
-                    return f'const {var.js()} = {var.reactive_val_js(self, other_expression)};'
-                
                 vars = list(filter((iter_var).__ne__, super().vars_needed_decleration()))
 
                 js_rerender_expression = \
                     f'(() => {{ const react_iter = {iter_val_js}; var output = \'\';' + \
                         'for (var i = 0; i < react_iter.length; ++i) {' + \
-                        get_def(iter_var, "react_iter[i]") + '\n' + \
-                        '\n'.join(get_def(var) for var in vars) + '\n' + \
-                        '\n'.join((hook.js_attach('proc', False) for hook in hooks if hook in vars)) + \
+                        self.get_def(iter_var, "react_iter[i]") + '\n' + \
+                        '\n'.join(self.get_def(var) for var in vars) + '\n' + \
                         '\n output += ' + js_section_rerender_expression + '; }; return output; })()'
             else:
                 js_rerender_expression = None
             
             return js_rerender_expression, (hook for hook in hooks if hook not in vars)
 
+        def render_script(self, subtree: Optional[List]) -> ResorceScript:
+            script = self.render_script_inside(subtree)
+            
+            self.clear_render()
+
+            iter_val_js, iter_hooks = self.iter_expression.eval_js_and_hooks(self)
+
+            iter_var = ReactVar(self.var_name, None)
+            self.add_var(iter_var)
+
+            js_section_rerender_expression, hooks_inside_unfiltered = self.render_js_and_hooks_inside(subtree)
+
+            # get all the hooks without iter_var, because that on change the array it's gonna change.
+            hooks_inside = filter((iter_var).__ne__, hooks_inside_unfiltered)
+            
+            hooks = set(chain(iter_hooks, hooks_inside))
+
+            vars = list(filter((iter_var).__ne__, super().vars_needed_decleration()))
+
+            defs = self.get_def(iter_var, "react_iter[i]") + '\n' + \
+                '\n'.join(self.get_def(var) for var in vars)
+
+            script.initial_pre_calc = '( () => {\n' + \
+                f'const react_iter = {iter_val_js};\n' + \
+                'for (var i = 0; i < react_iter.length; ++i) {\n' + \
+                self.get_def(iter_var, "react_iter[i]") + '\n' + \
+                '\n'.join((f'{self.control_var_name}[i].var_{var.name} = {var.reactive_val_js(self)};' for var in vars)) + \
+                '\n' + \
+                '\n'.join(self.get_def(var) for var in vars) + '\n' + \
+                script.initial_pre_calc + '} } )();'
+            
+            script.initial_post_calc = '( () => {\n' + \
+                f'const react_iter = {iter_val_js};\n' + \
+                'for (var i = 0; i < react_iter.length; ++i) {\n' + \
+                '\n' + defs + '\n' + script.initial_post_calc + '} } )();'
+            
+            script.destructor = '( () => {' + \
+                f'const react_iter = {iter_val_js};\n' + \
+                'for (var i = 0; i < react_iter.length; ++i) {\n' + \
+                '\n' + defs + '\n' + script.destructor + '} } )();'
+
+            return script
+
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
         iter_expression: Expression = self.iter_expression.reduce(template_context)
 
-        id = next_id(template_context, parent_context)
+        id = f'for_{next_id_by_context(template_context, "__react_for")}'
 
         return ReactForNode.Context(id=id, parent=parent_context, var_name=self.var_name, iter_expression=iter_expression)
     

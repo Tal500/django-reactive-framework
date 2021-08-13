@@ -3,7 +3,7 @@ from typing import Dict, Iterator, List, Optional, Tuple
 
 from django import template
 
-from ..core.base import ReactContext, ReactValType, ReactHook, ReactVar, value_to_expression
+from ..core.base import ReactContext, ReactData, ReactValType, ReactHook, ReactVar, value_to_expression
 
 common_delimiters = [('(', ')'), ('[', ']'), ('{', '}')]
 
@@ -42,6 +42,12 @@ def smart_split(expression: str, seperator: str, delimiters: List[Tuple[str, str
 class Expression:
     """ An immutable structure for holding expressions. """
 
+    def __repr__(self) -> str:
+        return f'{super().__repr__()}({str(self)})'
+    
+    def __str__(self) -> str:
+        return 'Expression'
+
     @abstractmethod
     def reduce(self, template_context: template.Context):
         """ Return a reduced expression with template context variables subtituted. """
@@ -71,6 +77,9 @@ class StringExpression(Expression):
     def __init__(self, val: str):
         self.val = val
     
+    def __str__(self) -> str:
+        return f"'{self.val}'"
+    
     def reduce(self, template_context: template.Context):
         return self
     
@@ -91,6 +100,9 @@ class IntExpression(Expression):
     def __init__(self, val: int):
         self.val = val
     
+    def __str__(self) -> str:
+        return f'{self.val}'
+    
     def reduce(self, template_context: template.Context):
         return self
     
@@ -110,6 +122,9 @@ class IntExpression(Expression):
 class BoolExpression(Expression):
     def __init__(self, val: bool):
         self.val = val
+    
+    def __str__(self) -> str:
+        return f'{self.val}'
     
     def reduce(self, template_context: template.Context):
         return self
@@ -133,6 +148,9 @@ class NoneExpression(Expression):
     def __init__(self):
         pass
     
+    def __str__(self) -> str:
+        return f'None'
+    
     def reduce(self, template_context: template.Context):
         return self
     
@@ -152,6 +170,9 @@ class NoneExpression(Expression):
 class ArrayExpression(Expression):
     def __init__(self, elements_expression: List[Expression]):
         self.elements_expression = elements_expression
+    
+    def __str__(self) -> str:
+        return f'[{", ".join(str(expression) for expression in self.elements_expression)}]'
     
     def reduce(self, template_context: template.Context):
         return ArrayExpression([expression.reduce(template_context) for expression in self.elements_expression])
@@ -186,8 +207,8 @@ class DictExpression(Expression):
     def __init__(self, dict_expression: Dict[str, Expression]):
         self.dict_expression = dict_expression
     
-    def __repr__(self) -> str:
-        return f'{super().__repr__()}{{{",".join((f"{key}:{repr(expression)}" for key, expression in self.dict_expression.items()))}}}'
+    def __str__(self) -> str:
+        return f'{{{",".join((f"{key}:{str(expression)}" for key, expression in self.dict_expression.items()))}}}'
     
     def reduce(self, template_context: template.Context):
         return DictExpression({key: expression.reduce(template_context) for key, expression in self.dict_expression.items()})
@@ -308,9 +329,6 @@ class PropertyExpression(Expression):
     def __str__(self):
         return '(' + str(self.root_expression) + ').' + '.'.join(self.key_path)
     
-    def __repr__(self) -> str:
-        return f'{super().__repr__()}({self})'
-    
     def reduce(self, template_context: template.Context):
         root_expression_reduced = self.root_expression.reduce(template_context)
         
@@ -361,6 +379,9 @@ class SettablePropertyExpression(PropertyExpression, SettableExpression):
     def __init__(self, root_expression: SettableExpression, key_path: List[str]):
         super().__init__(root_expression, key_path)
     
+    def __str__(self):
+        return str(self.root_expression) + '.' + '.'.join(self.key_path)
+    
     def reduce(self, template_context: template.Context):
         root_expression_reduced = self.root_expression.reduce(template_context)
         
@@ -374,6 +395,29 @@ class SettablePropertyExpression(PropertyExpression, SettableExpression):
     def js_notify(self, react_context: Optional[ReactContext]) -> str:
         settable_expression: SettableExpression = self.root_expression
         return settable_expression.js_notify(react_context)
+
+# This expression type is used only internally, and the user can't create it manually.
+class NewReactDataExpression(Expression):
+    def __init__(self, data: ReactData):
+        self.data: ReactData = data
+    
+    def __str__(self):
+        return f'ReactData(name={self.data.get_name()},expression={self.data.expression},tracked_initial={self.data.tracked_initial})'
+    
+    def reduce(self, template_context: template.Context):
+        return self
+    
+    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+        if hasattr(self.data, 'saved_initial'):
+            print("Have initial!")
+            value = self.data.saved_initial
+        else:
+            value = self.data.expression.eval_initial(react_context)
+
+        return ReactData(value_to_expression(value))
+
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+        return self.data.initial_val_js(react_context), [self.data]
 
 def remove_whitespaces_on_boundaries(s: str):
     for i in range(len(s)):

@@ -30,7 +30,9 @@ def next_id_by_context(context: template.Context, type_identifier: str) -> int:
     return currect
 
 def value_to_expression(val):
-    if isinstance(val, str):
+    if isinstance(val, ReactData):
+        return NewReactDataExpression(val)
+    elif isinstance(val, str):
         return StringExpression(val)
     elif isinstance(val, bool):
         return BoolExpression(val)
@@ -46,10 +48,11 @@ def value_to_expression(val):
         raise template.TemplateSyntaxError(
             "Currently the only types supported are string, bool and int for reactive variables values.")
 
-def value_js_representation(val):
+# One may be attempt to think that react_context is useless, but it's not since ReactData is a valid value.
+def value_js_representation(val: 'ReactValType', react_context: 'ReactContext'):
     expression: Expression = value_to_expression(val)
 
-    js, hooks = expression.eval_js_and_hooks(None)
+    js, hooks = expression.eval_js_and_hooks(react_context)
 
     return js
 
@@ -66,13 +69,16 @@ class ReactHook:
     def js_detach(self, js_attachment: str) -> str:
         pass
 
-ReactValType = Union[str, bool, int, None, List['ReactValType'], Dict[str, 'ReactValType']]
+ReactValType = Union[str, bool, int, None, List['ReactValType'], Dict[str, 'ReactValType'], 'ReactData']
 class ReactData(ReactHook):
     def __init__(self, expression: 'Expression'):
         self.expression = expression
+
+    def get_name(self) -> str:
+        return ''
     
     def initial_val_js(self, react_context: 'ReactContext', other_expression: str = None):
-        var_val_expr = value_js_representation(self.expression.eval_initial(react_context)) \
+        var_val_expr = value_js_representation(self.expression.eval_initial(react_context), react_context) \
             if other_expression is None else other_expression
         
         return f'new ReactVar({var_val_expr})'
@@ -105,7 +111,7 @@ class ReactVar(ReactData):
         return self.js() + ".val = (" + js_expression + ");"
     
     def js_attach(self, js_callable: str, invoke_if_changed_from_initial: bool):
-        return f'{self.js()}.attach({js_callable}, {value_js_representation(invoke_if_changed_from_initial)})'
+        return f'{self.js()}.attach({js_callable}, {value_js_representation(invoke_if_changed_from_initial, self.context)})'
 
     def js_detach(self, js_attachment: str):
         return f'{self.js()}.detach({js_attachment});'
@@ -118,7 +124,7 @@ class NativeReactVar(ReactVar):
         super().__init__(name, react_expression)
     
     def initial_val_js(self, react_context: 'ReactContext', other_expression: str = None):
-        var_val_expr = value_js_representation(self.expression.eval_initial(react_context)) \
+        var_val_expr = value_js_representation(self.expression.eval_initial(react_context), react_context) \
             if other_expression is None else other_expression
         
         return f'({var_val_expr})'
@@ -153,15 +159,12 @@ class ResorceScript:
         self.initial_post_calc: str = initial_post_calc
         self.destructor: str = destructor
     
-    def prepend(self, pre_script: str) -> 'ResorceScript':
-        if pre_script:
-            return ResorceScript(
-                initial_pre_calc = pre_script + '\n' + self.initial_pre_calc,
-                initial_post_calc = pre_script + '\n' + self.initial_post_calc,
-                destructor = pre_script + '\n' + self.destructor,
-            )
-        else:
-            return self
+    def surround(self, pre: str, post: str) -> 'ResorceScript':
+        return ResorceScript(
+            initial_pre_calc = pre + self.initial_pre_calc + post if self.initial_pre_calc else '',
+            initial_post_calc = pre + self.initial_post_calc + post if self.initial_post_calc else '',
+            destructor = pre + self.destructor + post if self.destructor else '',
+        )
 
 reactcontext_str = 'reactcontext'
 reacttrack_uuid_str: str = uuid.uuid4().hex
@@ -176,6 +179,7 @@ class ReactContext:
         self.child_contexts: List[ReactContext] = []
         self.fully_reactive: bool = fully_reactive
         self.vars: Dict[str, ReactVar] = {}
+        self.compute_initial: bool = False
 
         if parent:
             parent.child_contexts.append(self)
@@ -199,6 +203,7 @@ class ReactContext:
     # TODO?: Don't use it, instead have a render board which contains varaibles, and have a result object after render.
     def clear_render(self):
         self.vars: Dict[str, ReactVar] = {}
+        self.compute_initial = False
 
         self.clear_render_inside()
     
@@ -213,6 +218,9 @@ class ReactContext:
         
         self.vars[var.name] = var
         var.context = self
+
+        if self.compute_initial and var.expression is not None:
+            var.saved_initial = var.expression.eval_initial(self)
     
     def vars_needed_decleration(self):
         """Virtual method which tells the parent what vars in its scope are needed to be declared"""
@@ -431,9 +439,7 @@ class ReactNode(template.Node):
             # Recuservly destroy all context in order to help the garbage collector
             current_context.destroy()
 
-            # Notice that we're intentionally don't print here script.dectruct
             return output + ('<script>\n' + \
-                f'( () => {{ {script.initial_pre_calc} }} )();\n' + \
                 f'( () => {{ {script.initial_post_calc} }} )();\n' + \
                 '</script>' if script else '')
         else:
