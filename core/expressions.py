@@ -298,7 +298,7 @@ class VariableExpression(SettableExpression):
 
 class PropertyExpression(Expression):
     def __init__(self, root_expression: Expression, key_path: List[str]):
-        # TODO: Support both by "." and []
+        # TODO: Support also "[]" and not only "."
 
         assert(key_path)
 
