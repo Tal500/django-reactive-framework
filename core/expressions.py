@@ -178,7 +178,6 @@ class ArrayExpression(Expression):
 
         expression = expression[1:-1]
 
-        # TODO: Handle split by ',' inside string literal, etc.
         parts = smart_split(expression, ',', common_delimiters)
 
         return ArrayExpression([parse_expression(part) for part in parts])
@@ -215,7 +214,6 @@ class DictExpression(Expression):
 
         expression = expression[1:-1]
 
-        # TODO: Handle split by ',' inside string literal, etc.
         parts = smart_split(expression, ',', common_delimiters)
 
         def split_part(part: str) -> Tuple[str, Expression]:
@@ -308,7 +306,7 @@ class PropertyExpression(Expression):
         self.key_path: List[str] = key_path
     
     def __str__(self):
-        return str(self.root_expression) + '.' + '.'.join(self.key_path)
+        return '(' + str(self.root_expression) + ').' + '.'.join(self.key_path)
     
     def __repr__(self) -> str:
         return f'{super().__repr__()}({self})'
@@ -333,7 +331,7 @@ class PropertyExpression(Expression):
     def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
         root_var_js, hooks = self.root_expression.eval_js_and_hooks(react_context)
 
-        return root_var_js + '.' + '.'.join(self.key_path), hooks
+        return '(' + root_var_js + ').' + '.'.join(self.key_path), hooks
     
     @staticmethod
     def try_parse(expression: str) -> Optional['PropertyExpression']:
@@ -390,10 +388,10 @@ def remove_whitespaces_on_boundaries(s: str):
 
 def parse_expression(expression: str):
     expression = remove_whitespaces_on_boundaries(expression)
-
-    # TODO: Support much more, and int expression (use regular expression?)
     
-    if exp := StringExpression.try_parse(expression):
+    if expression[0] == '(' and expression[-1] == ')':
+        return parse_expression(expression[1:-1])
+    elif exp := StringExpression.try_parse(expression):
         return exp
     elif exp := BoolExpression.try_parse(expression):
         return exp
