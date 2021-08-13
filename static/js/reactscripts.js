@@ -1,23 +1,68 @@
 // TODO: Don't use classes since it's supported only by modern browsers.
+
+// Based on https://javascript.plainenglish.io/doubly-linked-lists-with-javascript-9c20a9dc4fb3
+class Node {
+    constructor(val) {
+        this.val = val;
+        this.next = null;
+        this.prev = null;
+    }
+}
+
+class DoublyLinkedList {
+    constructor() {
+        this.head = null;
+        this.tail = null;
+    }
+
+    push(val) {
+        const newNode = new Node(val);
+        if (this.head === null) {
+            this.head = newNode;
+            this.tail = newNode;
+        } else {
+            this.tail.next = newNode;
+            newNode.prev = this.tail;
+            this.tail = newNode;
+        }
+        return this;
+    }
+
+    remove_node(node) {
+        if (node.prev === null)
+            this.head = node.next;
+        else
+            node.prev.next = node.next;
+        
+        if (node.next === null)
+            this.tail = node.prev;
+        else
+            node.next.prev = node.prev;
+    }
+}
+
 class ReactVar {
     constructor(initial_val) {
       this._val = initial_val;
       this.changed_from_initial = false;
-      this.attached = [];
+      this.attached = new DoublyLinkedList();
     }
 
     attach(cb, invoke_if_changed_from_initial) {
-        this.attached.push(cb);
+        var attachment = this.attached.push(cb);
         if (this.changed_from_initial && invoke_if_changed_from_initial)
             cb();
+        
+        return attachment;
     }
 
     notify() {
         this.changed_from_initial = true;
 
-        for (var i = 0; i < this.attached.length; ++i) {
-            const cb = this.attached[i]
-            cb();
+        var current = this.attached.head;
+        while (current !== null) {
+            current.val();
+            current = current.next;
         }
     }
 
@@ -26,7 +71,7 @@ class ReactVar {
     }
 
     set val(new_val) {
-        if (this.val !== new_val || (new_val && new_val.constructor == Object)) {
+        if (this.val !== new_val || (new_val && new_val.constructor == Object)) {// TODO: also for arrays
             this._val = new_val;
             this.notify();
         }
