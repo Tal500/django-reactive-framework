@@ -29,7 +29,7 @@ def smart_split(expression: str, seperator: str, delimiters: List[Tuple[str, str
                 i = loc + 1
                 continue
         else:
-            if char == end_delimiters_stack[len(end_delimiters_stack) - 1]:
+            if char == end_delimiters_stack[-1]:
                 end_delimiters_stack.pop()
                 continue
         # otherwise
