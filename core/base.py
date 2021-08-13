@@ -233,7 +233,7 @@ class ReactContext:
         return ResorceScript(
             initial_pre_calc = '\n'.join(initial_pre_calc_scripts),
             initial_post_calc = '\n'.join(initial_post_calc_scripts),
-            destructor = '\n'.join(destructor_scripts),
+            destructor = '\n'.join(reversed(destructor_scripts)),
         )
     
     def render_js_and_hooks_inside(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
