@@ -430,7 +430,6 @@ class NewReactDataExpression(Expression):
     
     def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
         if hasattr(self.data, 'saved_initial'):
-            print("Have initial!")
             value = self.data.saved_initial
         else:
             value = self.data.expression.eval_initial(react_context)
