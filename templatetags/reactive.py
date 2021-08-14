@@ -226,7 +226,7 @@ class ReactForNode(ReactNode):
             if not isinstance(iter_val_initial, list):
                 raise template.TemplateSyntaxError("Can't loop through non-list value!")
 
-            data: List[Dict[str, ReactValType]] = []
+            iters: List[Dict[str, ReactValType]] = []
             html_outputs: List[str] = []
             for element_val in iter_val_initial:
                 self.compute_initial = True
@@ -242,11 +242,13 @@ class ReactForNode(ReactNode):
 
                 iter_data: Dict[str, ReactValType] = {('var_' + var.js()): var for var in vars}
 
-                data.append(iter_data)
+                iters.append(iter_data)
 
                 self.clear_render()
             
-            control_var = NativeReactVar(self.control_var_name, value_to_expression(data))
+            control_data = {'last_length': len(iters), 'iters': iters}
+
+            control_var = NativeReactVar(self.control_var_name, value_to_expression(control_data))
             
             self.add_var(control_var)
             
@@ -255,7 +257,7 @@ class ReactForNode(ReactNode):
         
         def get_def(self, var: ReactVar, other_expression: Optional[str] = None):
             return f'const {var.js()} = ' + \
-                f'{(self.control_var_name + "[i].var_" + var.js()) if (other_expression is None) else other_expression};'
+                f'{(self.control_var_name + ".iters[i].var_" + var.js()) if (other_expression is None) else other_expression};'
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             iter_val_js, iter_hooks = self.iter_expression.eval_js_and_hooks(self)
@@ -307,18 +309,31 @@ class ReactForNode(ReactNode):
             defs = '\n'.join(self.get_def(var) for var in vars)
 
             def get_set(var: ReactVar, other_js_expression: Optional[str] = None):
-                return self.control_var_name + '[i].var_' + \
+                return self.control_var_name + '.iters[i].var_' + \
                     var.js_set(var.expression.eval_js_and_hooks(self)[0] if other_js_expression is None else other_js_expression)
+
+            def get_reactive_js(var: ReactVar, other_js_expression: Optional[str] = None):
+                return f'var_{var.js()}:' + var.reactive_val_js(self, other_js_expression)
 
             script.initial_pre_calc = '( () => {\n' + \
                 f'const react_iter = {iter_val_js};\n' + \
+                f'const length_changed = ({self.control_var_name}.last_length !== react_iter.length);\n' + \
+                f'{self.control_var_name}.last_length = react_iter.length;\n' +\
+                f'if (length_changed) {{\n' + \
+                f'{self.control_var_name}.iters = [];\n' + \
+                '}\n' + \
                 'for (var i = 0; i < react_iter.length; ++i) {\n' + \
-                get_set(iter_var, 'react_iter[i]') + '\n' + \
-                self.get_def(iter_var) + '\n' + \
+                f'const {iter_var.js()} = {iter_var.reactive_val_js(self, "react_iter[i]")};\n' + \
+                f'if (length_changed) {{\n' + \
+                f'{self.control_var_name}.iters.push({{' + \
+                ','.join(chain((get_reactive_js(iter_var, iter_var.js()), ), (get_reactive_js(var) for var in vars_but_iter))) + \
+                '} ); } else {\n' + \
+                get_set(iter_var, iter_var.js()) + '\n' + \
                 '\n'.join(get_set(var) for var in vars_but_iter) + \
-                '\n' + \
+                '}\n' + \
                 '\n'.join(self.get_def(var) for var in vars_but_iter) + '\n' + \
-                script.initial_pre_calc + '} } )();'
+                script.initial_pre_calc + \
+                '} } )();'
             
             script.initial_post_calc = '( () => {\n' + \
                 f'const react_iter = {iter_val_js};\n' + \
