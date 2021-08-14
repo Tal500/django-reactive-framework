@@ -41,6 +41,13 @@ class DoublyLinkedList {
     }
 }
 
+var react_check_array_func = Array.isArray
+if (typeof react_check_array_func === 'undefined') {
+    react_check_array_func = function(obj) {
+      return Object.prototype.toString.call(obj) === '[object Array]';
+    }
+}
+
 class ReactVar {
     constructor(initial_val) {
       this._val = initial_val;
@@ -75,19 +82,11 @@ class ReactVar {
     }
 
     set val(new_val) {
-        if (this.val !== new_val || (new_val && new_val.constructor == Object)) {// TODO: also for arrays
+        if (this.val !== new_val || (new_val && (new_val.constructor == Object || react_check_array_func(new_val)))) {
             this._val = new_val;
             this.notify();
         }
     }
-}
-
-if (typeof Array.isArray === 'undefined') {
-    react_check_array_func = function(obj) {
-      return Object.prototype.toString.call(obj) === '[object Array]';
-    }
-} else {
-    react_check_array_func = Array.isArray
 }
 
 function react_print_html(obj) {
