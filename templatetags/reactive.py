@@ -8,7 +8,7 @@ from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import NativeReactVar, ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id, next_id_by_context, value_to_expression
-from ..core.expressions import ArrayExpression, DictExpression, Expression, SettableExpression, parse_expression
+from ..core.expressions import ArrayExpression, DictExpression, Expression, SettableExpression, StringExpression, parse_expression
 
 register = template.Library()
 
@@ -458,10 +458,9 @@ class ReactPrintNode(ReactNode):
                 return str(val_initial)
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
-            val_js, hooks = self.expression.eval_js_and_hooks(self)
-            
             # TODO: HTML escaping?
-            return f'react_print_html({val_js})', hooks
+
+            return self.expression.eval_js_html_output_and_hooks(self)
 
     def __init__(self, expression: Expression):
         self.expression = expression

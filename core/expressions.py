@@ -62,6 +62,14 @@ class Expression:
     def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
         """ Return a tupple of (js_expression, hooks) """
         pass
+
+    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+        """ Return a tupple of (js_html_output_expression, hooks) """
+        val_js, hooks = self.eval_js_and_hooks(react_context)
+        
+        # TODO: HTML escaping in this JS method?
+        return f'react_print_html({val_js})', hooks
+
 class SettableExpression(Expression):
     @abstractmethod
     def js_set(self, react_context: Optional[ReactContext], js_expression: str) -> str:
@@ -88,6 +96,10 @@ class StringExpression(Expression):
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
         return f"'{self.val}'", []
+
+    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+        # TODO: HTML escaping?
+        return f"'{self.val}'", []
     
     @staticmethod
     def try_parse(expression: str) -> Optional['StringExpression']:
@@ -111,6 +123,9 @@ class IntExpression(Expression):
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
         return str(self.val), []
+
+    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+        return f"'{self.val}'", []
     
     @staticmethod
     def try_parse(expression: str) -> Optional['IntExpression']:
@@ -134,6 +149,9 @@ class BoolExpression(Expression):
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
         return 'true' if self.val else 'false', []
+
+    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+        return f"'{str(self.val)}'"
     
     @staticmethod
     def try_parse(expression: str) -> Optional['BoolExpression']:
@@ -159,6 +177,9 @@ class NoneExpression(Expression):
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
         return 'null', []
+
+    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+        return f"'None'"
     
     @staticmethod
     def try_parse(expression: str) -> Optional['NoneExpression']:
