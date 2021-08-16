@@ -64,7 +64,9 @@ class ReactVar {
     }
 
     detach(attachment) {
-        this.attached.remove_node(attachment)
+        if (attachment) {
+            this.attached.remove_node(attachment)
+        }
     }
 
     notify() {

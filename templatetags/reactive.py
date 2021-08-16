@@ -109,7 +109,7 @@ def do_reactdef(parser, token):
 class ReactTagNode(ReactNode):
     tag_name = 'reacttag'
 
-    class RenderData(ReactContext):
+    class RenderData(ReactRerenderableContext):
         def __init__(self, parent: ReactContext, id: str, html_tag: str, computed_attributes: Dict[str, Any]):
             super().__init__(id=id, parent=parent, fully_reactive=True)
             self.html_tag: str = html_tag
@@ -129,6 +129,17 @@ class ReactTagNode(ReactNode):
 
             return '<' + self.html_tag + (' ' + attribute_str if attribute_str else '') + \
                 '>' + inner_html_output + '</' + self.html_tag + '>'
+        
+        def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
+            attribute_str = ' '.join((f'{key}="{escapejs(val)}"' for key, val in self.computed_attributes.items()))
+
+            inner_js_expression, hooks = self.render_js_and_hooks_inside(subtree)
+
+            js_expression = \
+                f"'{escapejs('<' + self.html_tag + (' ' + attribute_str if attribute_str else '') + '>')}'+" + \
+                    inner_js_expression + f"+'{escapejs('</' + self.html_tag + '>')}'"
+            
+            return js_expression, hooks
         
         def render_script(self, subtree: Optional[List]) -> str:
             script = self.render_script_inside(subtree)

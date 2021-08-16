@@ -173,8 +173,16 @@ setTimeout(
     {% reactset people %}
     {% reactget people %}
     {% endreactset %}
-    }, 1000);
+    }, 1500);
 </script>
+
+{% reacttag section %}
+You can have a tag inside another tag:
+Test var array is: {% reactprint test_array %}
+{% reacttag div %}
+Test var value is: {% reactprint test_var %}
+{% endreacttag %}
+{% endreacttag %}
 
 {% endreactblock %}
 {% endreactblock %}
