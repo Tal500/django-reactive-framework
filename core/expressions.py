@@ -366,6 +366,8 @@ class PropertyExpression(Expression):
             else:
                 raise template.TemplateSyntaxError(f"Error while parsing expression {self}: " +\
                     "There is no key named {key} in {current}")
+        
+        return current
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
         root_var_js, hooks = self.root_expression.eval_js_and_hooks(react_context)

@@ -144,6 +144,38 @@ setTimeout(
     }, 1200);
 </script>
 
+
+{% reactdef people [{first:'John',last:'Smith',age:40},{first:'Kristen',last:'Perkins',age:27}] %}
+
+{% reacttag section %}
+You may even render a table using an array of dictionary:
+<table>
+<tr>
+<th>First Name</th>
+<th>Last Name</th>
+<th>Age</th>
+</tr>
+{% reactfor person in people %}
+<tr>
+<td>{% reactprint person.first %}</td>
+<td>{% reactprint person.last %}</td>
+<td>{% reactprint person.age %}</td>
+</tr>
+{% endreactfor %}
+</table>
+{% endreacttag %}
+
+<script>
+setTimeout(
+    function() {
+    {% reactget people %}.push({first:'Marc',last:'Mcdowell',age:58})
+
+    {% reactset people %}
+    {% reactget people %}
+    {% endreactset %}
+    }, 1000);
+</script>
+
 {% endreactblock %}
 {% endreactblock %}
 

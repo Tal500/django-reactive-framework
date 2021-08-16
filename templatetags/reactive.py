@@ -141,8 +141,8 @@ class ReactTagNode(ReactNode):
             
             script.initial_post_calc = '( () => { function proc() {' + \
                 script.destructor + \
-                f'document.getElementById(\'{self.id}\').innerHTML = ' + js_rerender_expression + ';' + \
                 script.initial_pre_calc + \
+                f'document.getElementById(\'{self.id}\').innerHTML = ' + js_rerender_expression + ';' + \
                 ';}\n' + \
                 '\n'.join((f'{self.control_var_name}.attachment_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
                 '\n' + script.initial_post_calc + '} )();'
@@ -313,7 +313,7 @@ class ReactForNode(ReactNode):
                     var.js_set(var.expression.eval_js_and_hooks(self)[0] if other_js_expression is None else other_js_expression)
 
             def get_reactive_js(var: ReactVar, other_js_expression: Optional[str] = None):
-                return f'var_{var.js()}:' + var.reactive_val_js(self, other_js_expression)
+                return f'var_{var.js()}:' + (var.reactive_val_js(self) if other_js_expression is None else other_js_expression)
 
             script.initial_pre_calc = '( () => {\n' + \
                 f'const react_iter = {iter_val_js};\n' + \
@@ -341,8 +341,7 @@ class ReactForNode(ReactNode):
                 '\n' + defs + '\n' + script.initial_post_calc + '} } )();'
             
             script.destructor = '( () => {' + \
-                f'const react_iter = {iter_val_js};\n' + \
-                'for (var i = 0; i < react_iter.length; ++i) {\n' + \
+                f'for (var i = 0; i < {self.control_var_name}.iters.length; ++i) {{\n' + \
                 '\n' + defs + '\n' + script.destructor + '} } )();'
 
             return script
