@@ -119,40 +119,6 @@ class ReactVar(ReactData):
     def js_notify(self):
         return f'{self.js()}.notify();'
 
-class NativeReactVar(ReactVar):
-    def __init__(self, name: str, react_expression: 'Expression'):
-        super().__init__(name, react_expression)
-    
-    def initial_val_js(self, react_context: 'ReactContext', other_expression: str = None):
-        var_val_expr = value_js_representation(self.expression.eval_initial(react_context), react_context) \
-            if other_expression is None else other_expression
-        
-        return f'({var_val_expr})'
-    
-    def reactive_val_js(self, react_context: 'ReactContext', other_expression: str = None):
-        var_val_expr = self.expression.eval_js_and_hooks(react_context)[0] \
-            if other_expression is None else other_expression
-        
-        return f'({var_val_expr})'
-    
-    def js(self) -> str:
-        return self.name
-    
-    def js_get(self) -> str:
-        return self.js()
-    
-    def js_set(self, js_expression: str) -> str:
-        return self.js() + " = (" + js_expression + ");"
-    
-    def js_attach(self, js_callable: str, invoke_if_changed_from_initial: bool):
-        raise Exception("Reactive internal error: Can't call js_attach on NativeReactVar")
-
-    def js_detach(self, js_attachment: str):
-        raise Exception("Reactive internal error: Can't call js_detach on NativeReactVar")
-    
-    def js_notify(self):
-        raise Exception("Reactive internal error: Can't call js_notify on NativeReactVar")
-
 class ResorceScript:
     def __init__(self, initial_pre_calc: str = '', initial_post_calc: str = '', destructor: str = ''):
         self.initial_pre_calc: str = initial_pre_calc

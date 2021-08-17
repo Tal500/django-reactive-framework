@@ -7,7 +7,7 @@ from django.utils.html import escapejs
 from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
-from ..core.base import NativeReactVar, ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id, next_id_by_context, value_to_expression
+from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id, next_id_by_context, value_to_expression
 from ..core.expressions import Expression, SettableExpression, parse_expression
 
 register = template.Library()
@@ -124,7 +124,7 @@ class ReactTagNode(ReactNode):
         
             inner_html_output = self.render_html_inside(subtree)
 
-            control_var = NativeReactVar(self.control_var_name, value_to_expression(dict()))
+            control_var = ReactVar(self.control_var_name, value_to_expression(dict()))
             self.add_var(control_var)
 
             return '<' + self.html_tag + (' ' + attribute_str if attribute_str else '') + \
@@ -149,17 +149,20 @@ class ReactTagNode(ReactNode):
             js_rerender_expression, _hooks = self.render_js_and_hooks_inside(subtree)
 
             hooks = set(_hooks)
+
+            control_var = ReactVar(self.control_var_name, value_to_expression(dict()))
+            self.add_var(control_var)
             
             script.initial_post_calc = '( () => { function proc() {' + \
                 script.destructor + \
                 script.initial_pre_calc + \
                 f'document.getElementById(\'{self.id}\').innerHTML = ' + js_rerender_expression + ';' + \
                 ';}\n' + \
-                '\n'.join((f'{self.control_var_name}.attachment_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
+                '\n'.join((f'{control_var.js_get()}.attachment_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
                 '\n' + script.initial_post_calc + '} )();'
             
             script.destructor = '( () => {' + \
-                '\n'.join((hook.js_detach(f'{self.control_var_name}.attachment_{hook.get_name()}') for hook in hooks)) + \
+                '\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_{hook.get_name()}') for hook in hooks)) + \
                 '\n' + script.destructor + '} )();'
             
             return script
