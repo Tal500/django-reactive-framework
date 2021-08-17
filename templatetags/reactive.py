@@ -43,8 +43,7 @@ class ReactBlockNode(ReactNode):
         super().__init__(nodelist=nodelist, can_be_top_level=True)
     
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
-        # TODO: use better id generating with recursive contexts
-        id = next_id(template_context)
+        id = f'block_{next_id_by_context(template_context, "__react_block")}'
         
         return ReactBlockNode.Context(parent_context, id)
 
@@ -110,17 +109,36 @@ class ReactTagNode(ReactNode):
     tag_name = 'reacttag'
 
     class RenderData(ReactRerenderableContext):
-        def __init__(self, parent: ReactContext, id: str, html_tag: str, computed_attributes: Dict[str, Any]):
+        def __init__(self, parent: ReactContext, id: str, html_tag: str, html_attributes: Dict[str, str]):
             super().__init__(id=id, parent=parent, fully_reactive=True)
             self.html_tag: str = html_tag
-            self.computed_attributes: Dict[str, Any] = computed_attributes
             self.control_var_name: str = f'__react_control_{id}'
+            self.html_attributes: Dict[str, str] = html_attributes
     
         def var_js(self, var):
             return f'{var.name}_tag{self.id}'
         
+        def compute_attributes(self) -> Dict[str, str]:
+            # TODO: Compute the attributes by reactive expression instead (including tracking)
+            computed_attributes = dict(self.html_attributes)
+
+            id_attribute = computed_attributes.get('id')
+            if id_attribute is None:
+                path_id: str = ''
+                current: ReactContext = self
+                while current is not None:
+                    path_id = current.id + path_id
+                    current = current.parent
+
+                id_attribute = f'react_html_tag_{path_id}'
+                computed_attributes['id'] = id_attribute
+            
+            return computed_attributes
+        
         def render_html(self, subtree: Optional[List]) -> str:
-            attribute_str = ' '.join((f'{key}="{escapejs(val)}"' for key, val in self.computed_attributes.items()))
+            computed_attributes = self.compute_attributes()
+
+            attribute_str = ' '.join((f'{key}="{escapejs(val)}"' for key, val in computed_attributes.items()))
         
             inner_html_output = self.render_html_inside(subtree)
 
@@ -131,7 +149,9 @@ class ReactTagNode(ReactNode):
                 '>' + inner_html_output + '</' + self.html_tag + '>'
         
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
-            attribute_str = ' '.join((f'{key}="{escapejs(val)}"' for key, val in self.computed_attributes.items()))
+            computed_attributes = self.compute_attributes()
+
+            attribute_str = ' '.join((f'{key}="{escapejs(val)}"' for key, val in computed_attributes.items()))
 
             inner_js_expression, hooks = self.render_js_and_hooks_inside(subtree)
 
@@ -146,6 +166,8 @@ class ReactTagNode(ReactNode):
             
             self.clear_render()
 
+            computed_attributes = self.compute_attributes()
+
             js_rerender_expression, _hooks = self.render_js_and_hooks_inside(subtree)
 
             hooks = set(_hooks)
@@ -156,7 +178,7 @@ class ReactTagNode(ReactNode):
             script.initial_post_calc = '( () => { function proc() {' + \
                 script.destructor + \
                 script.initial_pre_calc + \
-                f'document.getElementById(\'{self.id}\').innerHTML = ' + js_rerender_expression + ';' + \
+                f'document.getElementById(\'{computed_attributes["id"]}\').innerHTML = ' + js_rerender_expression + ';' + \
                 ';}\n' + \
                 '\n'.join((f'{control_var.js_get()}.attachment_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
                 '\n' + script.initial_post_calc + '} )();'
@@ -167,24 +189,20 @@ class ReactTagNode(ReactNode):
             
             return script
     
-    def __init__(self, nodelist, html_tag: str, extra_attributes):
+    def __init__(self, nodelist: template.NodeList, html_tag: str, html_attributes: Dict[str, Any]):
         self.nodelist = nodelist
         self.html_tag: str = html_tag
-        self.extra_attributes = extra_attributes
+        self.html_attributes = html_attributes
 
         super().__init__(nodelist=nodelist)
     
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
+        id = f'tag_{next_id_by_context(template_context, "__react_tag")}'
+
         # TODO: Compute the attributes by reactive expression instead (including tracking)
-        computed_attributes = {key: val.resolve(template_context) for key, val in self.extra_attributes.items()}
+        parsed_html_attributes = {key: str(val.resolve(template_context)) for key, val in self.html_attributes.items()}
 
-        id = computed_attributes.get('id')
-        if id is None:
-            local_id = next_id_by_context(template_context, '__react_tag')
-            id = f'react_html_tag_{local_id}'
-            computed_attributes['id'] = id
-
-        return ReactTagNode.RenderData(parent_context, id, self.html_tag, computed_attributes)
+        return ReactTagNode.RenderData(parent_context, id, self.html_tag, parsed_html_attributes)
 
 @register.tag(ReactTagNode.tag_name)
 def do_reacttag(parser, token):
