@@ -8,7 +8,7 @@ from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
-from ..core.expressions import Expression, SettableExpression, parse_expression
+from ..core.expressions import Expression, SettableExpression, parse_expression, smart_split, common_delimiters
 
 register = template.Library()
 
@@ -94,10 +94,10 @@ class ReactDefNode(ReactNode):
         return ReactDefNode.Context(parent_context, self.var_name, var_val_expression)
 
 @register.tag(ReactDefNode.tag_name)
-def do_reactdef(parser, token):
+def do_reactdef(parser: template.base.Parser, token: template.base.Token):
     # TODO: Make the difference between bounded and unbounded expressions(i.e. if reactivity change them).
     try:
-        tag_name, var_name, var_val_expression = token.split_contents()
+        tag_name, var_name, var_val_expression = tuple(smart_split(token.contents, ' ', common_delimiters))
     except ValueError:
         raise template.TemplateSyntaxError(
             "%r tag requires exactly two arguments" % token.contents.split()[0]
@@ -205,8 +205,8 @@ class ReactTagNode(ReactNode):
         return ReactTagNode.RenderData(parent_context, id, self.html_tag, parsed_html_attributes)
 
 @register.tag(ReactTagNode.tag_name)
-def do_reacttag(parser, token):
-    bits = token.split_contents()
+def do_reacttag(parser: template.base.Parser, token: template.base.Token):
+    bits = list(smart_split(token.contents, ' ', common_delimiters))
 
     if len(bits) < 2:
         raise template.TemplateSyntaxError(
@@ -406,8 +406,8 @@ class ReactForNode(ReactNode):
         super().__init__(nodelist=nodelist)
 
 @register.tag(ReactForNode.tag_name)
-def do_reactfor(parser, token):
-    bits = token.split_contents()
+def do_reactfor(parser: template.base.Parser, token: template.base.Token):
+    bits = list(smart_split(token.contents, ' ', common_delimiters))
 
     if len(bits) != 4:
         raise template.TemplateSyntaxError(
@@ -482,10 +482,10 @@ class ReactIfNode(ReactNode):
         return ReactIfNode.Context(id=id, parent=parent_context, expression=expression)
 
 @register.tag(ReactIfNode.tag_name)
-def do_reactif(parser, token):
+def do_reactif(parser: template.base.Parser, token: template.base.Token):
     # TODO: add support for else and elif in the future
 
-    bits = token.split_contents()
+    bits = list(smart_split(token.contents, ' ', common_delimiters))
 
     if len(bits) != 2:
         raise template.TemplateSyntaxError(
@@ -538,12 +538,12 @@ class ReactPrintNode(ReactNode):
 
 # TODO: Maybe instead use just the {% ... %} tag and just track it and render it from outside?
 @register.tag(ReactPrintNode.tag_name)
-def do_reactprint(parser, token):
-    bits = token.split_contents()
+def do_reactprint(parser: template.base.Parser, token: template.base.Token):
+    bits = list(smart_split(token.contents, ' ', common_delimiters))
 
-    if len(bits) < 2:
+    if len(bits) != 2:
         raise template.TemplateSyntaxError(
-            "%r tag requires at least two arguments" % token.contents.split()[0]
+            "%r tag requires exactly two arguments" % token.contents.split()[0]
         )
     # otherwise
 
@@ -581,10 +581,10 @@ class ReactGetNode(ReactNode):
         return ReactGetNode.Context(parent_context, expression)
 
 @register.tag(ReactGetNode.tag_name)
-def do_reactget(parser, token):
+def do_reactget(parser: template.base.Parser, token: template.base.Token):
     """Get current present value, in js expression"""
 
-    bits = token.split_contents()
+    bits = list(smart_split(token.contents, ' ', common_delimiters))
 
     if len(bits) != 2:
         raise template.TemplateSyntaxError(
@@ -622,12 +622,12 @@ class ReactSetNode(ReactNode):
         return ReactSetNode.Context(parent_context, settable_expression)
 
 @register.tag(ReactSetNode.tag_name)
-def do_reactset(parser, token):
+def do_reactset(parser: template.base.Parser, token: template.base.Token):
     """Set current present value to a js expression"""
 
     # TODO: Make the difference between bounded and unbounded expressions. (Currently unbound)
 
-    bits = token.split_contents()
+    bits = list(smart_split(token.contents, ' ', common_delimiters))
 
     if len(bits) != 2:
         raise template.TemplateSyntaxError(
@@ -678,8 +678,8 @@ class ReactScriptNode(ReactNode):
         return ReactScriptNode.Context(id=id, parent=parent_context)
 
 @register.tag(ReactScriptNode.tag_name)
-def do_reactscript(parser, token):
-    bits = token.split_contents()
+def do_reactscript(parser: template.base.Parser, token: template.base.Token):
+    bits = list(smart_split(token.contents, ' ', common_delimiters))
 
     if len(bits) != 1:
         raise template.TemplateSyntaxError(

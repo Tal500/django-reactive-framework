@@ -119,6 +119,26 @@ Even None is supported:
 </ul>
 {% endreacttag %}
 
+{% reactdef number 3 %}
+{% reactdef greeting 'Hi' %}
+
+{% reacttag p %}
+You may also use plus operator:<br />
+2+{% reactprint number %}={% reactprint 2+number %}<br />
+"{% reactprint greeting %}"+" "+"World"={% reactprint greeting+" "+"World" %}
+{% endreacttag %}
+<script>
+setTimeout(
+    function() {
+    {% reactset number %}{% reactget 4 %}{% endreactset %}
+    
+    setTimeout(
+        function() {
+        {% reactset greeting %}'Hello'{% endreactset %}
+        }, 500);
+    }, 1000);
+</script>
+
 {% reactdef test_json {v1:'2','v7':'3',nested:{A:1,B:2},arr:[{a:1,b:2},{c:3}]} %}
 
 {% reacttag section %}

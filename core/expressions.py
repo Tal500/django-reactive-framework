@@ -5,7 +5,47 @@ from django import template
 
 from ..core.base import ReactContext, ReactData, ReactValType, ReactHook, ReactVar, value_to_expression
 
-common_delimiters = [('(', ')'), ('[', ']'), ('{', '}')]
+def parse_first_string(expression: str, delimiter: str) -> Optional[Tuple[str, int]]:
+    """ Return a tupple first substring found and the location to the next character, unless failed and then None. """
+    if (not expression) or expression[0] != delimiter:
+        return None
+    # otherwise
+
+    i = 1
+    output = []
+
+    while i < len(expression):
+        char = expression[i]
+        if char == delimiter:
+            return ''.join(output), (i + 1)
+        elif char == '\\':
+            next_char = expression[i+1]
+            if next_char == delimiter:
+                output.append(delimiter)
+            if next_char == '\\':
+                output.append('\\')
+            if next_char == 'n':
+                output.append('\n')
+            if next_char == 't':
+                output.append('\t')
+            else:
+                return None
+
+            i += 2
+        else:
+            output.append(char)
+            i += 1
+
+def parse_string(expression: str, delimiter: str) -> Optional[str]:
+    if result := parse_first_string(expression, delimiter):
+        result_str, i = result
+        if i == len(expression):
+            return result_str
+    # otherwise
+
+    return None
+
+common_delimiters = [('(', ')'), ('[', ']'), ('{', '}'), ('"', '"'), ("'", "'")]
 
 def match_and_return_second(char: str, pairs: List[Tuple[str, str]]):
     for first, second in pairs:
@@ -15,10 +55,9 @@ def match_and_return_second(char: str, pairs: List[Tuple[str, str]]):
 
     return None
 
-# TODO: Handle correct string parsing, and raise exception on syntax error?
+# TODO: Handle correct string parsing, and raise exception on syntax error? (use parse_first_string)
 def smart_split(expression: str, seperator: str, delimiters: List[Tuple[str, str]]) -> Iterator[str]:
     i = 0
-    loc = 0
 
     end_delimiters_stack = []
 
@@ -38,6 +77,17 @@ def smart_split(expression: str, seperator: str, delimiters: List[Tuple[str, str
             end_delimiters_stack.append(end_delimiter)\
 
     yield expression[i:]
+
+def manual_non_empty_sum(iter):
+    is_first = True
+    for element in iter:
+        if is_first:
+            sum = element
+            is_first = False
+        else:
+            sum = sum + element
+    
+    return sum
 
 class Expression:
     """ An immutable structure for holding expressions. """
@@ -103,10 +153,13 @@ class StringExpression(Expression):
     
     @staticmethod
     def try_parse(expression: str) -> Optional['StringExpression']:
-        if len(expression) >= 2 and expression[0] == expression[-1] and (expression[0] == "'" or expression[0] == "'"):
-            return StringExpression(expression[1:-1])# TODO: escape characters!
-        else:
-            return None
+        if len(expression) >= 2 and expression[0] == expression[-1]:
+            delimiter = expression[0]
+            if (delimiter == "'" or delimiter == '"') and (result_str := parse_string(expression, delimiter)):
+                return StringExpression(result_str)
+        # otherwise
+        
+        return None
 
 class IntExpression(Expression):
     def __init__(self, val: int):
@@ -185,6 +238,39 @@ class NoneExpression(Expression):
     def try_parse(expression: str) -> Optional['NoneExpression']:
         if expression == 'None' or expression == 'null':
             return NoneExpression()
+        else:
+            return None
+
+class SumExpression(Expression):
+    def __init__(self, elements_expression: List[Expression]):
+        self.elements_expression = elements_expression
+    
+    def __str__(self) -> str:
+        return '+'.join(str(expression) for expression in self.elements_expression)
+    
+    def reduce(self, template_context: template.Context):
+        return SumExpression([expression.reduce(template_context) for expression in self.elements_expression])
+    
+    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+        return manual_non_empty_sum(expression.eval_initial(react_context) for expression in self.elements_expression)
+
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+        js_expressions, all_hooks = [], []
+
+        for expression in self.elements_expression:
+            js_expression, hooks = expression.eval_js_and_hooks(react_context)
+
+            js_expressions.append(js_expression)
+            all_hooks.extend(hooks)
+
+        return f"({'+'.join(js_expressions)})", all_hooks
+    
+    @staticmethod
+    def try_parse(expression: str) -> Optional['SumExpression']:
+        parts = list(smart_split(expression, '+', common_delimiters))
+
+        if len(parts) > 1:
+            return SumExpression([parse_expression(part) for part in parts])
         else:
             return None
 
@@ -458,12 +544,19 @@ def parse_expression(expression: str):
     if expression[0] == '(' and expression[-1] == ')':
         return parse_expression(expression[1:-1])
     elif exp := StringExpression.try_parse(expression):
+        print('String in', expression)
         return exp
     elif exp := BoolExpression.try_parse(expression):
+        print('Bool in', expression)
         return exp
     elif exp := IntExpression.try_parse(expression):
+        print('Int in', expression)
         return exp
     elif exp := NoneExpression.try_parse(expression):
+        print('None in', expression)
+        return exp
+    elif exp := SumExpression.try_parse(expression):
+        print('Sum in', expression)
         return exp
     elif exp := ArrayExpression.try_parse(expression):
         return exp
