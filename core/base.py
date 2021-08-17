@@ -11,15 +11,6 @@ from django.utils.safestring import mark_safe
 count_str = 'react_currect_count'
 count_reactcontent_str = 'currect_reactcontent_count'
 
-# TODO: Remove this method
-def next_id(context: template.Context, reactcontent = None) -> int:
-    if reactcontent is None:
-        revelant_str = count_reactcontent_str
-    else:
-        revelant_str = count_str
-
-    return next_id_by_context(context, revelant_str)
-
 def next_id_by_context(context: template.Context, type_identifier: str) -> int:
     if not context.get(type_identifier):
         context[type_identifier] = 0

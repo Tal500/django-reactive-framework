@@ -7,7 +7,7 @@ from django.utils.html import escapejs
 from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
-from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id, next_id_by_context, value_to_expression
+from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
 from ..core.expressions import Expression, SettableExpression, parse_expression
 
 register = template.Library()
@@ -477,7 +477,7 @@ class ReactIfNode(ReactNode):
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
         expression: Expression = self.expression.reduce(template_context)
 
-        id = next_id(template_context, parent_context)
+        id = f'if_{next_id_by_context(template_context, "__react_if")}'
 
         return ReactIfNode.Context(id=id, parent=parent_context, expression=expression)
 
@@ -673,7 +673,7 @@ class ReactScriptNode(ReactNode):
         super().__init__(nodelist=nodelist)
 
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
-        id = next_id(template_context, parent_context)
+        id = f'script_{next_id_by_context(template_context, "__react_script")}'
 
         return ReactScriptNode.Context(id=id, parent=parent_context)
 
