@@ -184,6 +184,37 @@ Test var value is: {% reactprint test_var %}
 {% endreacttag %}
 {% endreacttag %}
 
+
+{% reactdef nested_array [[1,2,3],[11,12,13],[21,22,23]] %}
+
+{% reacttag section %}
+And also a for inside another for loop:
+
+<ul>
+{% reactfor array in nested_array %}
+<li>
+The {% reactprint array %} is listed:
+<ul>
+{% reactfor element in array %}
+<li>
+{% reactprint element %}
+</li>
+{% endreactfor %}
+</ul>
+</li>
+{% endreactfor %}
+</ul>
+{% endreacttag %}
+
+<script>
+setTimeout(
+    function() {
+    {% reactset nested_array %}
+    [[1,2,3,4],[11,12,13,14],[21,22,23,24],[31,32,33,34]]
+    {% endreactset %}
+    }, 1500);
+</script>
+
 {% endreactblock %}
 {% endreactblock %}
 

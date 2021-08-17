@@ -8,7 +8,7 @@ from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import NativeReactVar, ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id, next_id_by_context, value_to_expression
-from ..core.expressions import ArrayExpression, DictExpression, Expression, SettableExpression, StringExpression, parse_expression
+from ..core.expressions import Expression, SettableExpression, parse_expression
 
 register = template.Library()
 
@@ -259,16 +259,16 @@ class ReactForNode(ReactNode):
             
             control_data = {'last_length': len(iters), 'iters': iters}
 
-            control_var = NativeReactVar(self.control_var_name, value_to_expression(control_data))
+            control_var = ReactVar(self.control_var_name, value_to_expression(control_data))
             
             self.add_var(control_var)
             
             return ''.join(html_outputs)
         
         
-        def get_def(self, var: ReactVar, other_expression: Optional[str] = None):
+        def get_def(self, control_var: ReactVar, var: ReactVar, other_expression: Optional[str] = None):
             return f'const {var.js()} = ' + \
-                f'{(self.control_var_name + ".iters[i].var_" + var.js()) if (other_expression is None) else other_expression};'
+                f'{(control_var.js_get() + ".iters[i].var_" + var.js()) if (other_expression is None) else other_expression};'
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             iter_val_js, iter_hooks = self.iter_expression.eval_js_and_hooks(self)
@@ -283,26 +283,33 @@ class ReactForNode(ReactNode):
             
             hooks = set(chain(iter_hooks, hooks_inside))
 
-            if js_section_rerender_expression:
-                #vars = list(filter((iter_var).__ne__, super().vars_needed_decleration()))
-                vars = super().vars_needed_decleration()
+            #vars = list(filter((iter_var).__ne__, super().vars_needed_decleration()))
+            vars = super().vars_needed_decleration()
 
+            control_data = {'last_length': 0, 'iters': []}
+            control_var = ReactVar(self.control_var_name, value_to_expression(control_data))
+            self.add_var(control_var)
+
+            if js_section_rerender_expression:
                 js_rerender_expression = \
-                    f'(() => {{ const react_iter = {iter_val_js}; var output = \'\';' + \
-                        'for (var i = 0; i < react_iter.length; ++i) {' + \
-                        '\n'.join(self.get_def(var) for var in vars) + '\n' + \
-                        '\n output += ' + js_section_rerender_expression + '; }; return output; })()'
+                    '(() => {\n' + \
+                    f'// For loop expression calc\n' + \
+                    f'const react_iter = {iter_val_js}; var output = \'\';' + \
+                    'for (var i = 0; i < react_iter.length; ++i) {' + \
+                    '\n'.join(self.get_def(control_var, var) for var in vars) + '\n' + \
+                    '\n output += ' + js_section_rerender_expression + '; }; return output; })()'
             else:
                 js_rerender_expression = None
             
             return js_rerender_expression, (hook for hook in hooks if hook not in vars)
 
         def render_script(self, subtree: Optional[List]) -> ResorceScript:
+            iter_var = ReactVar(self.var_name, None)
+            self.add_var(iter_var)
+
             script = self.render_script_inside(subtree)
             
             self.clear_render()
-
-            iter_val_js, iter_hooks = self.iter_expression.eval_js_and_hooks(self)
 
             iter_var = ReactVar(self.var_name, None)
             self.add_var(iter_var)
@@ -311,48 +318,56 @@ class ReactForNode(ReactNode):
 
             # get all the hooks without iter_var, because that on change the array it's gonna change.
             hooks_inside = filter((iter_var).__ne__, hooks_inside_unfiltered)
-            
-            hooks = set(chain(iter_hooks, hooks_inside))
 
             vars_but_iter = list(filter((iter_var).__ne__, super().vars_needed_decleration()))
             vars = super().vars_needed_decleration()
+            
+            iter_val_js, iter_hooks = self.iter_expression.eval_js_and_hooks(self)
 
-            defs = '\n'.join(self.get_def(var) for var in vars)
+            hooks = set(chain(iter_hooks, hooks_inside))
+
+            control_var = ReactVar(self.control_var_name, None)
+            self.add_var(control_var)
+
+            defs = '\n'.join(self.get_def(control_var, var) for var in vars)
 
             def get_set(var: ReactVar, other_js_expression: Optional[str] = None):
-                return self.control_var_name + '.iters[i].var_' + \
+                return control_var.js_get() + '.iters[i].var_' + \
                     var.js_set(var.expression.eval_js_and_hooks(self)[0] if other_js_expression is None else other_js_expression)
 
             def get_reactive_js(var: ReactVar, other_js_expression: Optional[str] = None):
                 return f'var_{var.js()}:' + (var.reactive_val_js(self) if other_js_expression is None else other_js_expression)
 
             script.initial_pre_calc = '( () => {\n' + \
+                f'// For loop initial pre calc\n' + \
                 f'const react_iter = {iter_val_js};\n' + \
-                f'const length_changed = ({self.control_var_name}.last_length !== react_iter.length);\n' + \
-                f'{self.control_var_name}.last_length = react_iter.length;\n' +\
+                f'const length_changed = ({control_var.js_get()}.last_length !== react_iter.length);\n' + \
+                f'{control_var.js_get()}.last_length = react_iter.length;\n' +\
                 f'if (length_changed) {{\n' + \
-                f'{self.control_var_name}.iters = [];\n' + \
+                f'{control_var.js_get()}.iters = [];\n' + \
                 '}\n' + \
                 'for (var i = 0; i < react_iter.length; ++i) {\n' + \
                 f'const {iter_var.js()} = {iter_var.reactive_val_js(self, "react_iter[i]")};\n' + \
                 f'if (length_changed) {{\n' + \
-                f'{self.control_var_name}.iters.push({{' + \
+                f'{control_var.js_get()}.iters.push({{' + \
                 ','.join(chain((get_reactive_js(iter_var, iter_var.js()), ), (get_reactive_js(var) for var in vars_but_iter))) + \
                 '} ); } else {\n' + \
                 get_set(iter_var, iter_var.js()) + '\n' + \
                 '\n'.join(get_set(var) for var in vars_but_iter) + \
                 '}\n' + \
-                '\n'.join(self.get_def(var) for var in vars_but_iter) + '\n' + \
+                '\n'.join(self.get_def(control_var, var) for var in vars_but_iter) + '\n' + \
                 script.initial_pre_calc + \
                 '} } )();'
             
             script.initial_post_calc = '( () => {\n' + \
+                f'// For loop initial post calc\n' + \
                 f'const react_iter = {iter_val_js};\n' + \
                 'for (var i = 0; i < react_iter.length; ++i) {\n' + \
                 '\n' + defs + '\n' + script.initial_post_calc + '} } )();'
             
             script.destructor = '( () => {' + \
-                f'for (var i = 0; i < {self.control_var_name}.iters.length; ++i) {{\n' + \
+                f'// For loop destructor\n' + \
+                f'for (var i = 0; i < {control_var.js_get()}.iters.length; ++i) {{\n' + \
                 '\n' + defs + '\n' + script.destructor + '} } )();'
 
             return script
