@@ -8,7 +8,7 @@ from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
-from ..core.expressions import Expression, SettableExpression, parse_expression, smart_split, common_delimiters
+from ..core.expressions import Expression, SettableExpression, StringExpression, SumExpression, parse_expression, smart_split, common_delimiters
 
 register = template.Library()
 
@@ -118,19 +118,24 @@ class ReactTagNode(ReactNode):
         def var_js(self, var):
             return f'{var.name}_tag{self.id}'
         
-        def compute_attributes(self) -> Dict[str, str]:
+        def compute_attributes(self) -> Dict[str, Expression]:
             # TODO: Compute the attributes by reactive expression instead (including tracking)
             computed_attributes = dict(self.html_attributes)
 
-            id_attribute = computed_attributes.get('id')
+            id_attribute: Optional[Expression] = computed_attributes.get('id')
             if id_attribute is None:
-                path_id: str = ''
-                current: ReactContext = self
+                path_id_expressions: List[Expression] = [self.id_prefix_expression()]
+                current: ReactContext = self.parent
                 while current is not None:
-                    path_id = current.id + path_id
+                    path_id_expressions.append(StringExpression('_'))
+                    path_id_expressions.append(current.id_prefix_expression())
                     current = current.parent
+                
+                path_id_expressions.append(StringExpression('react_html_tag_'))
+                
+                path_id_expressions.reverse()
 
-                id_attribute = f'react_html_tag_{path_id}'
+                id_attribute = SumExpression(path_id_expressions)
                 computed_attributes['id'] = id_attribute
             
             return computed_attributes
@@ -138,7 +143,7 @@ class ReactTagNode(ReactNode):
         def render_html(self, subtree: Optional[List]) -> str:
             computed_attributes = self.compute_attributes()
 
-            attribute_str = ' '.join((f'{key}="{escapejs(val)}"' for key, val in computed_attributes.items()))
+            attribute_str = ' '.join((f'{key}="{escapejs(expression.eval_initial(self))}"' for key, expression in computed_attributes.items()))
         
             inner_html_output = self.render_html_inside(subtree)
 
@@ -151,15 +156,15 @@ class ReactTagNode(ReactNode):
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             computed_attributes = self.compute_attributes()
 
-            attribute_str = ' '.join((f'{key}="{escapejs(val)}"' for key, val in computed_attributes.items()))
+            attribute_str = '+'.join((f"' {key}=\"'+{expression.eval_js_and_hooks(self)[0]}+'\"'" for key, expression in computed_attributes.items()))
 
-            inner_js_expression, hooks = self.render_js_and_hooks_inside(subtree)
+            inner_js_expression, hooks_inside = self.render_js_and_hooks_inside(subtree)
 
             js_expression = \
-                f"'{escapejs('<' + self.html_tag + (' ' + attribute_str if attribute_str else '') + '>')}'+" + \
+                f"'{escapejs('<' + self.html_tag)}'+{attribute_str}+'>'+" + \
                     inner_js_expression + f"+'{escapejs('</' + self.html_tag + '>')}'"
             
-            return js_expression, hooks
+            return js_expression, []
         
         def render_script(self, subtree: Optional[List]) -> str:
             script = self.render_script_inside(subtree)
@@ -167,25 +172,43 @@ class ReactTagNode(ReactNode):
             self.clear_render()
 
             computed_attributes = self.compute_attributes()
+            id_js_expression = computed_attributes['id'].eval_js_and_hooks(self)[0]
 
-            js_rerender_expression, _hooks = self.render_js_and_hooks_inside(subtree)
+            attribute_js_expressions_and_hooks = {key: expression.eval_js_and_hooks(self) \
+                for key, expression in computed_attributes.items()}
 
-            hooks = set(_hooks)
+            js_rerender_expression, hooks_inside = self.render_js_and_hooks_inside(subtree)
+
+            hooks = set(hooks_inside)
 
             control_var = ReactVar(self.control_var_name, value_to_expression(dict()))
             self.add_var(control_var)
+
+            # TODO: Handle the unsupported style and events setting in old IE versions?
             
+            print(1, self.id, script.destructor)
             script.initial_post_calc = '( () => { function proc() {' + \
                 script.destructor + \
                 script.initial_pre_calc + \
-                f'document.getElementById(\'{computed_attributes["id"]}\').innerHTML = ' + js_rerender_expression + ';' + \
+                f'document.getElementById({id_js_expression}).innerHTML = ' + js_rerender_expression + ';\n' + \
+                script.initial_post_calc + '\n' + \
                 ';}\n' + \
-                '\n'.join((f'{control_var.js_get()}.attachment_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
-                '\n' + script.initial_post_calc + '} )();'
+                '\n'.join( chain.from_iterable((f'{control_var.js_get()}.attachment_attribute_{hook.get_name()} = ' + \
+                hook.js_attach(f"() => {{ document.getElementById({id_js_expression}).setAttribute(\'{attribute}\', " + \
+                js_expression + ")}", True) \
+                for hook in _hooks) \
+                for attribute, (js_expression, _hooks) in attribute_js_expressions_and_hooks.items())) + \
+                '\n' + \
+                '\n'.join((f'{control_var.js_get()}.attachment_content_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
+                ';\n})();'
+            print(2, self.id, script.initial_post_calc)
             
+            script.initial_pre_calc = ''
+
             script.destructor = '( () => {' + \
-                '\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_{hook.get_name()}') for hook in hooks)) + \
+                '\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_content_{hook.get_name()}') for hook in hooks)) + \
                 '\n' + script.destructor + '} )();'
+            print(3, self.id, script.destructor)
             
             return script
     
@@ -200,7 +223,7 @@ class ReactTagNode(ReactNode):
         id = f'tag_{next_id_by_context(template_context, "__react_tag")}'
 
         # TODO: Compute the attributes by reactive expression instead (including tracking)
-        parsed_html_attributes = {key: str(val.resolve(template_context)) for key, val in self.html_attributes.items()}
+        parsed_html_attributes = {key: StringExpression(str(val.resolve(template_context))) for key, val in self.html_attributes.items()}
 
         return ReactTagNode.RenderData(parent_context, id, self.html_tag, parsed_html_attributes)
 
@@ -251,6 +274,11 @@ class ReactForNode(ReactNode):
                 return [control_var]
             else:
                 return []
+        
+        def id_prefix_expression(self) -> Expression:
+            iter_var = self.search_var(self.var_name)
+
+            return SumExpression((StringExpression(self.id + '_iter_'), iter_var.reactive_val_js(self)))
 
         def render_html(self, subtree: List) -> str:
             iter_val_initial = self.iter_expression.eval_initial(self)
@@ -344,8 +372,6 @@ class ReactForNode(ReactNode):
             vars = super().vars_needed_decleration()
             
             iter_val_js, iter_hooks = self.iter_expression.eval_js_and_hooks(self)
-
-            hooks = set(chain(iter_hooks, hooks_inside))
 
             control_var = ReactVar(self.control_var_name, None)
             self.add_var(control_var)

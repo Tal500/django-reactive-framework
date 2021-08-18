@@ -544,19 +544,14 @@ def parse_expression(expression: str):
     if expression[0] == '(' and expression[-1] == ')':
         return parse_expression(expression[1:-1])
     elif exp := StringExpression.try_parse(expression):
-        print('String in', expression)
         return exp
     elif exp := BoolExpression.try_parse(expression):
-        print('Bool in', expression)
         return exp
     elif exp := IntExpression.try_parse(expression):
-        print('Int in', expression)
         return exp
     elif exp := NoneExpression.try_parse(expression):
-        print('None in', expression)
         return exp
     elif exp := SumExpression.try_parse(expression):
-        print('Sum in', expression)
         return exp
     elif exp := ArrayExpression.try_parse(expression):
         return exp

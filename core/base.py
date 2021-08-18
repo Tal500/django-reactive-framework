@@ -167,6 +167,9 @@ class ReactContext:
     def clear_render_inside(self):
         for child in self.child_contexts:
             child.clear_render()
+    
+    def id_prefix_expression(self) -> 'Expression':
+        return StringExpression(self.id)
 
     def add_var(self, var: ReactVar):
         if self.vars.get(var.name):
