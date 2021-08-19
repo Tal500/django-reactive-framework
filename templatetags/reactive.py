@@ -1,3 +1,4 @@
+import itertools
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from itertools import chain
@@ -7,9 +8,9 @@ from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
-from ..core.expressions import Expression, SettableExpression, StringExpression, SumExpression, parse_expression
+from ..core.expressions import EscapingContainerExpression, Expression, SettableExpression, StringExpression, SumExpression, parse_expression
 
-from ..core.utils import str_repr_s, str_repr_d, smart_split, common_delimiters
+from ..core.utils import str_repr_s, smart_split, common_delimiters, dq
 
 register = template.Library()
 
@@ -141,23 +142,31 @@ class ReactTagNode(ReactNode):
             
             return computed_attributes
         
-        def render_html(self, subtree: Optional[List]) -> str:
+        def compute_attribute_expression(self) -> Expression:
             computed_attributes = self.compute_attributes()
 
-            attribute_str = ' '.join((f'{key}={str_repr_d(expression.eval_initial(self))}' for key, expression in computed_attributes.items()))
+            exp_iter = ( (StringExpression(f' {key}=\"'), EscapingContainerExpression(expression, dq), StringExpression('\"')) \
+                for key, expression in computed_attributes.items() )
+
+            return SumExpression(list(itertools.chain.from_iterable(exp_iter)))
+        
+        def render_html(self, subtree: Optional[List]) -> str:
+            computed_attributes_expression = self.compute_attribute_expression()
+
+            attribute_str = computed_attributes_expression.eval_initial(self)
         
             inner_html_output = self.render_html_inside(subtree)
 
             control_var = ReactVar(self.control_var_name, value_to_expression(dict()))
             self.add_var(control_var)
 
-            return '<' + self.html_tag + (' ' + attribute_str if attribute_str else '') + \
+            return '<' + self.html_tag + attribute_str + \
                 '>' + inner_html_output + '</' + self.html_tag + '>'
         
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
-            computed_attributes = self.compute_attributes()
+            computed_attributes_expression = self.compute_attribute_expression()
 
-            attribute_str = '+'.join((f"' {key}=\"'+{expression.eval_js_and_hooks(self)[0]}+'\"'" for key, expression in computed_attributes.items()))
+            attribute_str = computed_attributes_expression.eval_js_and_hooks(self)[0]
 
             inner_js_expression, hooks_inside = self.render_js_and_hooks_inside(subtree)
 

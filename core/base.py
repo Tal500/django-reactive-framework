@@ -8,6 +8,8 @@ from django import template
 from django.utils.html import escapejs
 from django.utils.safestring import mark_safe
 
+from .utils import sq
+
 count_str = 'react_currect_count'
 count_reactcontent_str = 'currect_reactcontent_count'
 
@@ -40,10 +42,10 @@ def value_to_expression(val):
             "Currently the only types supported are string, bool and int for reactive variables values.")
 
 # One may be attempt to think that react_context is useless, but it's not since ReactData is a valid value.
-def value_js_representation(val: 'ReactValType', react_context: 'ReactContext'):
+def value_js_representation(val: 'ReactValType', react_context: 'ReactContext', delimiter: str = sq):
     expression: Expression = value_to_expression(val)
 
-    js, hooks = expression.eval_js_and_hooks(react_context)
+    js, hooks = expression.eval_js_and_hooks(react_context, delimiter=delimiter)
 
     return js
 
@@ -68,14 +70,14 @@ class ReactData(ReactHook):
     def get_name(self) -> str:
         return ''
     
-    def initial_val_js(self, react_context: 'ReactContext', other_expression: str = None):
-        var_val_expr = value_js_representation(self.expression.eval_initial(react_context), react_context) \
+    def initial_val_js(self, react_context: 'ReactContext', other_expression: str = None, delimiter: str = sq):
+        var_val_expr = value_js_representation(self.expression.eval_initial(react_context), react_context, delimiter) \
             if other_expression is None else other_expression
         
         return f'new ReactVar({var_val_expr})'
     
-    def reactive_val_js(self, react_context: 'ReactContext', other_expression: str = None):
-        var_val_expr = self.expression.eval_js_and_hooks(react_context)[0] \
+    def reactive_val_js(self, react_context: 'ReactContext', other_expression: str = None, delimiter: str = sq):
+        var_val_expr = self.expression.eval_js_and_hooks(react_context, delimiter)[0] \
             if other_expression is None else other_expression
         
         return f'new ReactVar({var_val_expr})'

@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 from django import template
 
 from .base import ReactContext, ReactData, ReactValType, ReactHook, ReactVar, value_to_expression
-from .utils import manual_non_empty_sum, str_repr_s, parse_string, smart_split, common_delimiters
+from .utils import manual_non_empty_sum, str_repr, str_repr_s, parse_string, smart_split, common_delimiters, sq
 
 class Expression:
     """ An immutable structure for holding expressions. """
@@ -26,13 +26,13 @@ class Expression:
         pass
 
     @abstractmethod
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         """ Return a tupple of (js_expression, hooks) """
         pass
 
-    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         """ Return a tupple of (js_html_output_expression, hooks) """
-        val_js, hooks = self.eval_js_and_hooks(react_context)
+        val_js, hooks = self.eval_js_and_hooks(react_context, delimiter)
         
         # TODO: HTML escaping in this JS method?
         return f'react_print_html({val_js})', hooks
@@ -61,12 +61,12 @@ class StringExpression(Expression):
     def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
         return self.val
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
-        return str_repr_s(self.val), []
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+        return str_repr(self.val, delimiter), []
 
-    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         # TODO: HTML escaping?
-        return str_repr_s(self.val), []
+        return str_repr(self.val, delimiter), []
     
     @staticmethod
     def try_parse(expression: str) -> Optional['StringExpression']:
@@ -91,11 +91,11 @@ class IntExpression(Expression):
     def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
         return self.val
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         return str(self.val), []
 
-    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
-        return f"'{self.val}'", []
+    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+        return f'{delimiter}{self.val}{delimiter}', []
     
     @staticmethod
     def try_parse(expression: str) -> Optional['IntExpression']:
@@ -114,10 +114,10 @@ class BoolExpression(Expression):
     def reduce(self, template_context: template.Context):
         return self
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional[ReactContext], delimiter: str = sq) -> ReactValType:
         return self.val
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         return 'true' if self.val else 'false', []
 
     def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
@@ -145,10 +145,10 @@ class NoneExpression(Expression):
     def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
         return None
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         return 'null', []
 
-    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         return f"'None'"
     
     @staticmethod
@@ -171,11 +171,11 @@ class SumExpression(Expression):
     def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
         return manual_non_empty_sum(expression.eval_initial(react_context) for expression in self.elements_expression)
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         js_expressions, all_hooks = [], []
 
         for expression in self.elements_expression:
-            js_expression, hooks = expression.eval_js_and_hooks(react_context)
+            js_expression, hooks = expression.eval_js_and_hooks(react_context, delimiter)
 
             js_expressions.append(js_expression)
             all_hooks.extend(hooks)
@@ -204,11 +204,11 @@ class ArrayExpression(Expression):
     def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
         return [expression.eval_initial(react_context) for expression in self.elements_expression]
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         js_expressions, all_hooks = [], []
 
         for expression in self.elements_expression:
-            js_expression, hooks = expression.eval_js_and_hooks(react_context)
+            js_expression, hooks = expression.eval_js_and_hooks(react_context, delimiter)
 
             js_expressions.append(js_expression)
             all_hooks.extend(hooks)
@@ -240,11 +240,11 @@ class DictExpression(Expression):
     def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
         return {key: expression.eval_initial(react_context) for key, expression in self.dict_expression.items()}
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         key_js_expressions, all_hooks = [], []
 
         for key, expression in self.dict_expression.items():
-            js_expression, hooks = expression.eval_js_and_hooks(react_context)
+            js_expression, hooks = expression.eval_js_and_hooks(react_context, delimiter)
 
             key_js_expressions.append((key, js_expression))
             all_hooks.extend(hooks)
@@ -310,13 +310,13 @@ class VariableExpression(SettableExpression):
         else:
             return ''
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         var = self.var(react_context)
 
         if var:
             return var.js_get(), [var]
         else:
-            return value_to_expression('').eval_js_and_hooks(react_context)
+            return value_to_expression('').eval_js_and_hooks(react_context, delimiter)
     
     def js_set(self, react_context: Optional[ReactContext], js_expression: str):
         var = self.var(react_context)
@@ -372,8 +372,8 @@ class PropertyExpression(Expression):
         
         return current
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
-        root_var_js, hooks = self.root_expression.eval_js_and_hooks(react_context)
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+        root_var_js, hooks = self.root_expression.eval_js_and_hooks(react_context, delimiter)
 
         return '(' + root_var_js + ').' + '.'.join(self.key_path), hooks
     
@@ -441,9 +441,34 @@ class NewReactDataExpression(Expression):
 
         return ReactData(value_to_expression(value))
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
-        return self.data.initial_val_js(react_context), [self.data]
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+        return self.data.initial_val_js(react_context, delimiter=delimiter), [self.data]
 
+# TODO: Support also escaping '/' (if needed)
+class EscapingContainerExpression(Expression):
+    def __init__(self, inner_expression: Expression, delimiter: str):
+        self.inner_expression: Expression = inner_expression
+        self.delimiter: str = delimiter
+    
+    def __str__(self) -> str:
+        return f'Escaping-{self.delimiter}({self.inner_expression})'
+    
+    def reduce(self, template_context: template.Context):
+        return EscapingContainerExpression(self.inner_expression.reduce(template_context), self.delimiter)
+    
+    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+        return self.inner_expression.eval_initial(react_context).translate(str.maketrans({self.delimiter: '\\' + self.delimiter}))
+
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+        inner_js_expression, hooks = self.inner_expression.eval_js_and_hooks(react_context)
+
+        delimiter_escaped = self.delimiter if self.delimiter!=delimiter else ("\\"+delimiter)
+
+        js_expression = f'({inner_js_expression}).toString().replace(/{delimiter_escaped}/g, {str_repr(delimiter_escaped, delimiter)})'
+        
+        return js_expression, hooks
+
+# TODO: Put it in utils
 def remove_whitespaces_on_boundaries(s: str):
     for i in range(len(s)):
         if s[i] not in [' ', '\t', '\n']:

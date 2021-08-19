@@ -1,14 +1,19 @@
-from typing import Iterator, List, Optional, Tuple
+from typing import Any, Iterator, List, Optional, Tuple
 
 
 sq = "'"
 dq = '"'
 
-def str_repr_s(string: str):
-    return sq + string.translate(str.maketrans({'\\': '\\\\', sq: "\\'", '\n': '\\n', '\t': '\\t'})) + sq
+def str_repr(val: Any, delimiter: str):
+    return delimiter + \
+        str(val).translate(str.maketrans({'\\': '\\\\', delimiter: "\\" + delimiter, '\n': '\\n', '\t': '\\t'})) + \
+        delimiter
 
-def str_repr_d(string: str):
-    return dq + string.translate(str.maketrans({'\\': '\\\\', dq: '\\"', '\n': '\\n', '\t': '\\t'})) + dq
+def str_repr_s(val: Any):
+    return str_repr(val, sq)
+
+def str_repr_d(val: Any):
+    return str_repr(val, dq)
 
 def parse_first_string(expression: str, delimiter: str) -> Optional[Tuple[str, int]]:
     """ Return a tupple first substring found and the location to the next character, unless failed and then None. """
