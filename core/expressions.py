@@ -5,6 +5,15 @@ from django import template
 
 from ..core.base import ReactContext, ReactData, ReactValType, ReactHook, ReactVar, value_to_expression
 
+sq = "'"
+dq = '"'
+
+def str_repr_s(string: str):
+    return sq + string.translate(str.maketrans({'\\': '\\\\', sq: "\\'", '\n': '\\n', '\t': '\\t'})) + sq
+
+def str_repr_d(string: str):
+    return dq + string.translate(str.maketrans({'\\': '\\\\', dq: '\\"', '\n': '\\n', '\t': '\\t'})) + dq
+
 def parse_first_string(expression: str, delimiter: str) -> Optional[Tuple[str, int]]:
     """ Return a tupple first substring found and the location to the next character, unless failed and then None. """
     if (not expression) or expression[0] != delimiter:
@@ -136,7 +145,7 @@ class StringExpression(Expression):
         self.val = val
     
     def __str__(self) -> str:
-        return f"'{self.val}'"
+        return str_repr_s(self.val)
     
     def reduce(self, template_context: template.Context):
         return self
@@ -145,11 +154,11 @@ class StringExpression(Expression):
         return self.val
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
-        return f"'{self.val}'", []
+        return str_repr_s(self.val), []
 
     def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
         # TODO: HTML escaping?
-        return f"'{self.val}'", []
+        return str_repr_s(self.val), []
     
     @staticmethod
     def try_parse(expression: str) -> Optional['StringExpression']:

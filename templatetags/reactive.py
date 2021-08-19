@@ -3,12 +3,11 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from itertools import chain
 
 from django import template
-from django.utils.html import escapejs
 from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
-from ..core.expressions import Expression, SettableExpression, StringExpression, SumExpression, parse_expression, smart_split, common_delimiters
+from ..core.expressions import Expression, SettableExpression, StringExpression, SumExpression, str_repr_s, str_repr_d, parse_expression, smart_split, common_delimiters
 
 register = template.Library()
 
@@ -143,7 +142,7 @@ class ReactTagNode(ReactNode):
         def render_html(self, subtree: Optional[List]) -> str:
             computed_attributes = self.compute_attributes()
 
-            attribute_str = ' '.join((f'{key}="{escapejs(expression.eval_initial(self))}"' for key, expression in computed_attributes.items()))
+            attribute_str = ' '.join((f'{key}={str_repr_d(expression.eval_initial(self))}' for key, expression in computed_attributes.items()))
         
             inner_html_output = self.render_html_inside(subtree)
 
@@ -161,8 +160,8 @@ class ReactTagNode(ReactNode):
             inner_js_expression, hooks_inside = self.render_js_and_hooks_inside(subtree)
 
             js_expression = \
-                f"'{escapejs('<' + self.html_tag)}'+{attribute_str}+'>'+" + \
-                    inner_js_expression + f"+'{escapejs('</' + self.html_tag + '>')}'"
+                f"{str_repr_s('<' + self.html_tag)}+{attribute_str}+'>'+" + \
+                    inner_js_expression + f"+{str_repr_s('</' + self.html_tag + '>')}"
             
             return js_expression, []
         
@@ -185,8 +184,8 @@ class ReactTagNode(ReactNode):
             self.add_var(control_var)
 
             # TODO: Handle the unsupported style and events setting in old IE versions?
+            # TODO: Using setting attribute by property instead of setAttribute? E.g. .value instead of SetAttribute that works better in Gecko.
             
-            print(1, self.id, script.destructor)
             script.initial_post_calc = '( () => { function proc() {' + \
                 script.destructor + \
                 script.initial_pre_calc + \
@@ -201,14 +200,12 @@ class ReactTagNode(ReactNode):
                 '\n' + \
                 '\n'.join((f'{control_var.js_get()}.attachment_content_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
                 ';\n})();'
-            print(2, self.id, script.initial_post_calc)
             
             script.initial_pre_calc = ''
 
             script.destructor = '( () => {' + \
                 '\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_content_{hook.get_name()}') for hook in hooks)) + \
                 '\n' + script.destructor + '} )();'
-            print(3, self.id, script.destructor)
             
             return script
     
