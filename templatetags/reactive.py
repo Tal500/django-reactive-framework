@@ -7,7 +7,9 @@ from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
-from ..core.expressions import Expression, SettableExpression, StringExpression, SumExpression, str_repr_s, str_repr_d, parse_expression, smart_split, common_delimiters
+from ..core.expressions import Expression, SettableExpression, StringExpression, SumExpression, parse_expression
+
+from ..core.utils import str_repr_s, str_repr_d, smart_split, common_delimiters
 
 register = template.Library()
 
