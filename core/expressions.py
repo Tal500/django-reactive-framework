@@ -14,6 +14,10 @@ class Expression:
     
     def __str__(self) -> str:
         return 'Expression'
+    
+    @property
+    def constant(self) -> bool:
+        return False
 
     @abstractmethod
     def reduce(self, template_context: template.Context):
@@ -55,6 +59,10 @@ class StringExpression(Expression):
     def __str__(self) -> str:
         return str_repr_s(self.val)
     
+    @property
+    def constant(self) -> bool:
+        return True
+    
     def reduce(self, template_context: template.Context):
         return self
     
@@ -85,6 +93,10 @@ class IntExpression(Expression):
     def __str__(self) -> str:
         return f'{self.val}'
     
+    @property
+    def constant(self) -> bool:
+        return True
+    
     def reduce(self, template_context: template.Context):
         return self
     
@@ -110,6 +122,10 @@ class BoolExpression(Expression):
     
     def __str__(self) -> str:
         return f'{self.val}'
+    
+    @property
+    def constant(self) -> bool:
+        return True
     
     def reduce(self, template_context: template.Context):
         return self
@@ -139,6 +155,10 @@ class NoneExpression(Expression):
     def __str__(self) -> str:
         return f'None'
     
+    @property
+    def constant(self) -> bool:
+        return True
+    
     def reduce(self, template_context: template.Context):
         return self
     
@@ -159,14 +179,46 @@ class NoneExpression(Expression):
             return None
 
 class SumExpression(Expression):
-    def __init__(self, elements_expression: List[Expression]):
-        self.elements_expression = elements_expression
+    def __init__(self, expression_list: List[Expression], optimize: bool = True):
+        if optimize:
+            # Optimize it to what is needed
+            optimized_expression_list = []
+            current_summend = []
+            for expression in expression_list:
+                if expression.constant:
+                    current_summend.append(expression)
+                else:
+                    if current_summend:
+                        optimized_expression_list.append(value_to_expression(SumExpression(current_summend, False).eval_initial(None)))
+                        current_summend = []
+                    
+                    optimized_expression_list.append(expression)
+                    print(optimized_expression_list)
+            
+            # Add the last part (if any)
+            if current_summend:
+                optimized_expression_list.append(value_to_expression(SumExpression(current_summend, False).eval_initial(None)))
+        else:
+            optimized_expression_list = expression_list
+
+        self.elements_expression = optimized_expression_list
     
     def __str__(self) -> str:
         return '+'.join(str(expression) for expression in self.elements_expression)
     
-    def reduce(self, template_context: template.Context):
-        return SumExpression([expression.reduce(template_context) for expression in self.elements_expression])
+    @property
+    def constant(self) -> bool:
+        for element in self.elements_expression:
+            if not element.constant:
+                return False
+        # otherwise
+
+        return True
+    
+    def reduce(self, template_context: template.Context) -> 'SumExpression':
+        expression_list = [expression.reduce(template_context) for expression in self.elements_expression]
+
+        return SumExpression(expression_list)
     
     def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
         return manual_non_empty_sum(expression.eval_initial(react_context) for expression in self.elements_expression)
@@ -193,10 +245,19 @@ class SumExpression(Expression):
 
 class ArrayExpression(Expression):
     def __init__(self, elements_expression: List[Expression]):
-        self.elements_expression = elements_expression
+        self.elements_expression: List[Expression] = elements_expression
     
     def __str__(self) -> str:
         return f'[{", ".join(str(expression) for expression in self.elements_expression)}]'
+    
+    @property
+    def constant(self) -> bool:
+        for element in self.elements_expression:
+            if not element.constant:
+                return False
+        # otherwise
+
+        return True
     
     def reduce(self, template_context: template.Context):
         return ArrayExpression([expression.reduce(template_context) for expression in self.elements_expression])
@@ -233,6 +294,15 @@ class DictExpression(Expression):
     
     def __str__(self) -> str:
         return f'{{{",".join((f"{key}:{str(expression)}" for key, expression in self.dict_expression.items()))}}}'
+    
+    @property
+    def constant(self) -> bool:
+        for key, expression in self.dict_expression.items():
+            if not expression.constant:
+                return False
+        # otherwise
+
+        return True
     
     def reduce(self, template_context: template.Context):
         return DictExpression({key: expression.reduce(template_context) for key, expression in self.dict_expression.items()})
@@ -353,6 +423,10 @@ class PropertyExpression(Expression):
     def __str__(self):
         return '(' + str(self.root_expression) + ').' + '.'.join(self.key_path)
     
+    @property
+    def constant(self) -> bool:
+        return self.root_expression.constant
+    
     def reduce(self, template_context: template.Context):
         root_expression_reduced = self.root_expression.reduce(template_context)
         
@@ -449,6 +523,10 @@ class EscapingContainerExpression(Expression):
     def __init__(self, inner_expression: Expression, delimiter: str):
         self.inner_expression: Expression = inner_expression
         self.delimiter: str = delimiter
+    
+    @property
+    def constant(self) -> bool:
+        return self.inner_expression.constant
     
     def __str__(self) -> str:
         return f'Escaping-{self.delimiter}({self.inner_expression})'
