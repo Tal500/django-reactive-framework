@@ -89,12 +89,19 @@ def smart_split(expression: str, seperator: str, delimiters: List[Tuple[str, str
     yield expression[i:]
 
 def manual_non_empty_sum(iter):
-    is_first = True
+    is_first: bool = True
+    is_string: bool = False
     for element in iter:
         if is_first:
             sum = element
             is_first = False
+            
+            if isinstance(element, str):
+                is_string = True
         else:
+            if is_string:
+                element = str(element)
+            
             sum = sum + element
     
     return sum

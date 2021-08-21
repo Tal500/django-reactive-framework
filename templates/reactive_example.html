@@ -176,11 +176,11 @@ You may even render a table using an array of dictionary:
 <th>Age</th>
 </tr>
 {% reactfor person in people %}
-<tr>
+{% reacttag tr %}
 <td>{% reactprint person.first %}</td>
 <td>{% reactprint person.last %}</td>
 <td>{% reactprint person.age %}</td>
-</tr>
+{% endreacttag %}
 {% endreactfor %}
 </table>
 {% endreacttag %}
