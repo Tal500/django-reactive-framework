@@ -193,7 +193,6 @@ class SumExpression(Expression):
                         current_summend = []
                     
                     optimized_expression_list.append(expression)
-                    print(optimized_expression_list)
             
             # Add the last part (if any)
             if current_summend:
