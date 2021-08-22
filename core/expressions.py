@@ -179,28 +179,8 @@ class NoneExpression(Expression):
             return None
 
 class SumExpression(Expression):
-    def __init__(self, expression_list: List[Expression], optimize: bool = True):
-        if optimize:
-            # Optimize it to what is needed
-            optimized_expression_list = []
-            current_summend = []
-            for expression in expression_list:
-                if expression.constant:
-                    current_summend.append(expression)
-                else:
-                    if current_summend:
-                        optimized_expression_list.append(value_to_expression(SumExpression(current_summend, False).eval_initial(None)))
-                        current_summend = []
-                    
-                    optimized_expression_list.append(expression)
-            
-            # Add the last part (if any)
-            if current_summend:
-                optimized_expression_list.append(value_to_expression(SumExpression(current_summend, False).eval_initial(None)))
-        else:
-            optimized_expression_list = expression_list
-
-        self.elements_expression = optimized_expression_list
+    def __init__(self, expression_list: List[Expression]):
+        self.elements_expression = expression_list
     
     def __str__(self) -> str:
         return '+'.join(str(expression) for expression in self.elements_expression)
@@ -221,11 +201,33 @@ class SumExpression(Expression):
     
     def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
         return manual_non_empty_sum(expression.eval_initial(react_context) for expression in self.elements_expression)
+    
+    def optimize(self):
+        # Optimize it to what is needed
+        optimized_expression_list = []
+        current_summend = []
+        for expression in self.elements_expression:
+            if expression.constant:
+                current_summend.append(expression)
+            else:
+                if current_summend:
+                    optimized_expression_list.append(value_to_expression(SumExpression(current_summend).eval_initial(None)))
+                    current_summend = []
+                
+                optimized_expression_list.append(expression)
+        
+        # Add the last part (if any)
+        if current_summend:
+            optimized_expression_list.append(value_to_expression(SumExpression(current_summend).eval_initial(None)))
+        
+        return SumExpression(optimized_expression_list)
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+        optimized = self.optimize()
+
         js_expressions, all_hooks = [], []
 
-        for expression in self.elements_expression:
+        for expression in optimized.elements_expression:
             js_expression, hooks = expression.eval_js_and_hooks(react_context, delimiter)
 
             js_expressions.append(js_expression)
