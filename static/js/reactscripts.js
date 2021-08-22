@@ -1,44 +1,30 @@
 // TODO: Don't use classes since it's supported only by modern browsers.
 
 // Based on https://javascript.plainenglish.io/doubly-linked-lists-with-javascript-9c20a9dc4fb3
-class Node {
-    constructor(val) {
-        this.val = val;
-        this.next = null;
-        this.prev = null;
+
+function __reactive_dll_push(self, val) {
+    const newNode = {val:val,next:null,prev:null};
+    if (self.head === null) {
+        self.head = newNode;
+        self.tail = newNode;
+    } else {
+        self.tail.next = newNode;
+        newNode.prev = self.tail;
+        self.tail = newNode;
     }
+    return newNode;
 }
 
-class DoublyLinkedList {
-    constructor() {
-        this.head = null;
-        this.tail = null;
-    }
-
-    push(val) {
-        const newNode = new Node(val);
-        if (this.head === null) {
-            this.head = newNode;
-            this.tail = newNode;
-        } else {
-            this.tail.next = newNode;
-            newNode.prev = this.tail;
-            this.tail = newNode;
-        }
-        return newNode;
-    }
-
-    remove_node(node) {
-        if (node.prev === null)
-            this.head = node.next;
-        else
-            node.prev.next = node.next;
-        
-        if (node.next === null)
-            this.tail = node.prev;
-        else
-            node.next.prev = node.prev;
-    }
+function __reactive_remove_node(self, node) {
+    if (node.prev === null)
+        self.head = node.next;
+    else
+        node.prev.next = node.next;
+    
+    if (node.next === null)
+        self.tail = node.prev;
+    else
+        node.next.prev = node.prev;
 }
 
 var react_check_array_func = Array.isArray
@@ -52,11 +38,11 @@ class ReactVar {
     constructor(initial_val) {
       this._val = initial_val;
       this.changed_from_initial = false;
-      this.attached = new DoublyLinkedList();
+      this.attached = {head:null,tail:null};
     }
 
     attach(cb, invoke_if_changed_from_initial) {
-        const attachment = this.attached.push(cb);
+        const attachment = __reactive_dll_push(this.attached,cb);
         if (this.changed_from_initial && invoke_if_changed_from_initial)
             cb();
         
@@ -65,7 +51,7 @@ class ReactVar {
 
     detach(attachment) {
         if (attachment) {
-            this.attached.remove_node(attachment)
+            __reactive_remove_node(this.attached,attachment)
         }
     }
 
