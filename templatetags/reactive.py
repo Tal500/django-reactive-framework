@@ -402,8 +402,9 @@ class ReactForNode(ReactNode):
                     return ''
                 # otherwise
 
-                return control_var.js_get() + '.iters[i].var_' + \
-                    var.js_set(var.expression.eval_js_and_hooks(self)[0] if other_js_expression is None else other_js_expression)
+                return var.js_set(
+                    var.expression.eval_js_and_hooks(self)[0] if other_js_expression is None else other_js_expression,
+                    alt_js_name=f'{control_var.js_get()}.iters[i].var_{var.js()}')
 
             def get_reactive_js(var: ReactVar, other_js_expression: Optional[str] = None):
                 return f'var_{var.js()}:' + (var.reactive_val_js(self) if other_js_expression is None else other_js_expression)
@@ -420,7 +421,7 @@ class ReactForNode(ReactNode):
                 f'const {iter_var.js()} = {iter_var.reactive_val_js(self, "react_iter[i]")};\n' + \
                 f'if (length_changed) {{\n' + \
                 f'{control_var.js_get()}.iters.push({{' + \
-                ','.join(chain((get_reactive_js(iter_var, iter_var.js()), get_reactive_js(iter_id_var, 'new ReactVar(i)')), \
+                ','.join(chain((get_reactive_js(iter_var, iter_var.js()), get_reactive_js(iter_id_var, '__reactive_data(i)')), \
                     (get_reactive_js(var) for var in filter((iter_id_var).__ne__, vars_but_iter)))) + \
                 '} ); } else {\n' + \
                 get_set(iter_var, iter_var.js()) + '\n' + \

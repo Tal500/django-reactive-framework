@@ -74,13 +74,13 @@ class ReactData(ReactHook):
         var_val_expr = value_js_representation(self.expression.eval_initial(react_context), react_context, delimiter) \
             if other_expression is None else other_expression
         
-        return f'new ReactVar({var_val_expr})'
+        return f'__reactive_data({var_val_expr})'
     
     def reactive_val_js(self, react_context: 'ReactContext', other_expression: str = None, delimiter: str = sq):
         var_val_expr = self.expression.eval_js_and_hooks(react_context, delimiter)[0] \
             if other_expression is None else other_expression
         
-        return f'new ReactVar({var_val_expr})'
+        return f'__reactive_data({var_val_expr})'
 
 class ReactVar(ReactData):
     def __init__(self, name: str, react_expression: 'Expression'):
@@ -100,17 +100,17 @@ class ReactVar(ReactData):
     def js_get(self) -> str:
         return "(" + self.js() + ".val)"
     
-    def js_set(self, js_expression: str) -> str:
-        return self.js() + ".val = (" + js_expression + ");"
+    def js_set(self, js_expression: str, alt_js_name: Optional[str] = None) -> str:
+        return f'__reactive_data_set({self.js() if alt_js_name is None else alt_js_name},{js_expression});'
     
     def js_attach(self, js_callable: str, invoke_if_changed_from_initial: bool):
-        return f'{self.js()}.attach({js_callable}, {value_js_representation(invoke_if_changed_from_initial, self.context)})'
+        return f'__reactive_data_attach({self.js()},{js_callable},{value_js_representation(invoke_if_changed_from_initial, self.context)});'
 
     def js_detach(self, js_attachment: str):
-        return f'{self.js()}.detach({js_attachment});'
+        return f'__reactive_data_detach({self.js()},{js_attachment});'
     
     def js_notify(self):
-        return f'{self.js()}.notify();'
+        return f'__reactive_data_notify({self.js()});'
 
 class ResorceScript:
     def __init__(self, initial_pre_calc: str = '', initial_post_calc: str = '', destructor: str = ''):

@@ -1,6 +1,4 @@
-// TODO: Don't use classes since it's supported only by modern browsers.
-
-// Based on https://javascript.plainenglish.io/doubly-linked-lists-with-javascript-9c20a9dc4fb3
+// The doubly linked list(dll) is based on https://javascript.plainenglish.io/doubly-linked-lists-with-javascript-9c20a9dc4fb3
 
 function __reactive_dll_push(self, val) {
     const newNode = {val:val,next:null,prev:null};
@@ -34,46 +32,38 @@ if (typeof __reactive_check_array_func === 'undefined') {
     }
 }
 
-class ReactVar {
-    constructor(initial_val) {
-      this._val = initial_val;
-      this.changed_from_initial = false;
-      this.attached = {head:null,tail:null};
+function __reactive_data(initial_val) {
+    return {val:initial_val,changed_from_initial:false,attached:{head:null,tail:null}}
+}
+
+function __reactive_data_attach(self, cb, invoke_if_changed_from_initial) {
+    const attachment = __reactive_dll_push(self.attached, cb);
+    if (self.changed_from_initial && invoke_if_changed_from_initial)
+        cb();
+    
+    return attachment;
+}
+
+function __reactive_data_detach(self, attachment) {
+    if (attachment) {
+        __reactive_remove_node(self.attached,attachment)
     }
+}
 
-    attach(cb, invoke_if_changed_from_initial) {
-        const attachment = __reactive_dll_push(this.attached,cb);
-        if (this.changed_from_initial && invoke_if_changed_from_initial)
-            cb();
-        
-        return attachment;
+function __reactive_data_notify(self) {
+    self.changed_from_initial = true;
+
+    var current = self.attached.head;
+    while (current !== null) {
+        current.val();
+        current = current.next;
     }
+}
 
-    detach(attachment) {
-        if (attachment) {
-            __reactive_remove_node(this.attached,attachment)
-        }
-    }
-
-    notify() {
-        this.changed_from_initial = true;
-
-        var current = this.attached.head;
-        while (current !== null) {
-            current.val();
-            current = current.next;
-        }
-    }
-
-    get val() {
-        return this._val;
-    }
-
-    set val(new_val) {
-        if (this.val !== new_val || (new_val && (new_val.constructor == Object || __reactive_check_array_func(new_val)))) {
-            this._val = new_val;
-            this.notify();
-        }
+function __reactive_data_set(self, new_val) {
+    if (self.val !== new_val || (new_val && (new_val.constructor == Object || __reactive_check_array_func(new_val)))) {
+        self.val = new_val;
+        __reactive_data_notify(self);
     }
 }
 
