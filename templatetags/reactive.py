@@ -707,6 +707,53 @@ def do_reactset(parser: template.base.Parser, token: template.base.Token):
 
     return ReactSetNode(nodelist, expression)
 
+class ReactNotifyNode(ReactNode):
+    tag_name = 'notify'
+
+    class Context(ReactContext):
+        def __init__(self, parent, settable_expression: SettableExpression):
+            self.settable_expression: SettableExpression = settable_expression
+            super().__init__(id='', parent=parent, fully_reactive=False)
+
+        def render_html(self, subtree: List) -> str:
+            output = self.settable_expression.js_notify(self)
+
+            return output# TODO: Shell we use "mark_safe" here?
+
+    def __init__(self, settable_expression: SettableExpression):
+        self.settable_expression = settable_expression
+        super().__init__(nodelist=None)
+
+    def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
+        settable_expression: Expression = self.settable_expression.reduce(template_context)
+
+        return ReactNotifyNode.Context(parent_context, settable_expression)
+
+@register.tag('#/' + ReactNotifyNode.tag_name)
+def do_reactnotify(parser: template.base.Parser, token: template.base.Token):
+    """Set current present value to a js expression"""
+
+    # TODO: Make the difference between bounded and unbounded expressions. (Currently unbound)
+
+    bits = list(smart_split(token.contents, ' ', common_delimiters))
+
+    if len(bits) != 2:
+        raise template.TemplateSyntaxError(
+            "%r tag requires at exactly two arguments" % token.contents.split()[0]
+        )
+    # otherwise
+
+    var_expression = bits[1]
+
+    expression = parse_expression(var_expression)
+
+    if not isinstance(expression, SettableExpression):
+        raise template.TemplateSyntaxError(
+            "%r tag requires the first expression to be reactively setable." % token.contents.split()[0]
+        )
+
+    return ReactNotifyNode(expression)
+
 class ReactRedoNode(ReactNode):
     tag_name = 'redo'
 

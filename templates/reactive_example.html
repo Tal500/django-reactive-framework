@@ -151,9 +151,7 @@ setTimeout(
     function() {
     {% #/get test_json %}.v10 = 5
 
-    {% #set test_json %}
-    {% #/get test_json %}
-    {% /set %}
+    {% #/notify test_json %}
     
     setTimeout(
         function() {
@@ -188,9 +186,7 @@ setTimeout(
     function() {
     {% #/get people %}.push({first:'Marc',last:'Mcdowell',age:58})
 
-    {% #set people %}
-    {% #/get people %}
-    {% /set %}
+    {% #/notify people %}
     }, 1500);
 </script>
 
