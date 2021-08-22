@@ -206,7 +206,6 @@ class ReactTagNode(ReactNode):
             self.add_var(control_var)
 
             # TODO: Handle the unsupported style and events setting in old IE versions?
-            # TODO: Using setting attribute by property instead of setAttribute? E.g. .value instead of SetAttribute that works better in Gecko.
             
             script.initial_post_calc = '( () => { function proc() {' + \
                 script.destructor + \
@@ -215,8 +214,8 @@ class ReactTagNode(ReactNode):
                 script.initial_post_calc + '\n' + \
                 ';}\n' + \
                 '\n'.join( chain.from_iterable((f'{control_var.js_get()}.attachment_attribute_{hook.get_name()} = ' + \
-                hook.js_attach(f"() => {{ document.getElementById({id_js_expression}).setAttribute(\'{attribute}\', " + \
-                js_expression + ")}", True) \
+                hook.js_attach(f"() => {{ document.getElementById({id_js_expression}).{attribute} = " + \
+                js_expression + ";}", True) \
                 for hook in _hooks) \
                 for attribute, (js_expression, _hooks) in attribute_js_expressions_and_hooks.items())) + \
                 ';\n' + \
