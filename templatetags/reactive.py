@@ -12,7 +12,7 @@ from django.templatetags.static import static
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
 from ..core.expressions import EscapingContainerExpression, Expression, IntExpression, SettableExpression, StringExpression, SumExpression, VariableExpression, parse_expression
 
-from ..core.utils import str_repr_s, smart_split, common_delimiters, dq
+from ..core.utils import split_kwargs, str_repr_s, smart_split, common_delimiters, dq
 
 register = template.Library()
 
@@ -120,17 +120,16 @@ class ReactTagNode(ReactNode):
     tag_name = 'reacttag'
 
     class RenderData(ReactRerenderableContext):
-        def __init__(self, parent: ReactContext, id: str, html_tag: str, html_attributes: Dict[str, str]):
+        def __init__(self, parent: ReactContext, id: str, html_tag: str, html_attributes: Dict[str, Expression]):
             super().__init__(id=id, parent=parent, fully_reactive=True)
             self.html_tag: str = html_tag
             self.control_var_name: str = f'__react_control_{id}'
-            self.html_attributes: Dict[str, str] = html_attributes
+            self.html_attributes: Dict[str, Expression] = html_attributes
     
         def var_js(self, var):
             return f'{var.name}_tag{self.id}'
         
         def compute_attributes(self) -> Dict[str, Expression]:
-            # TODO: Compute the attributes by reactive expression instead (including tracking)
             computed_attributes = dict(self.html_attributes)
 
             id_attribute: Optional[Expression] = computed_attributes.get('id')
@@ -232,7 +231,7 @@ class ReactTagNode(ReactNode):
             
             return script
     
-    def __init__(self, nodelist: template.NodeList, html_tag: str, html_attributes: Dict[str, Any]):
+    def __init__(self, nodelist: template.NodeList, html_tag: str, html_attributes: Dict[str, Expression]):
         self.nodelist = nodelist
         self.html_tag: str = html_tag
         self.html_attributes = html_attributes
@@ -242,8 +241,7 @@ class ReactTagNode(ReactNode):
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
         id = f'tag_{next_id_by_context(template_context, "__react_tag")}'
 
-        # TODO: Compute the attributes by reactive expression instead (including tracking)
-        parsed_html_attributes = {key: StringExpression(str(val.resolve(template_context))) for key, val in self.html_attributes.items()}
+        parsed_html_attributes = {key: val.reduce(template_context) for key, val in self.html_attributes.items()}
 
         return ReactTagNode.RenderData(parent_context, id, self.html_tag, parsed_html_attributes)
 
@@ -260,17 +258,13 @@ def do_reacttag(parser: template.base.Parser, token: template.base.Token):
     html_tag = bits[1]
 
     remaining_bits = bits[2:]
-    extra_attributes = template.base.token_kwargs(remaining_bits, parser, support_legacy=False)
-
-    if remaining_bits:
-        raise template.TemplateSyntaxError("%r received an invalid token: %r" %
-                                  (bits[0], remaining_bits[0]))
-    # otherwise
+    html_attributes_unparsed = split_kwargs(remaining_bits)
+    html_attributes = { attribute: parse_expression(val_unparsed) for attribute, val_unparsed in html_attributes_unparsed }
 
     nodelist = parser.parse(('endreacttag',))
     parser.delete_first_token()
 
-    return ReactTagNode(nodelist, html_tag, extra_attributes)
+    return ReactTagNode(nodelist, html_tag, html_attributes)
 
 class ReactForNode(ReactNode):
     tag_name = 'reactfor'

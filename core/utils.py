@@ -1,4 +1,6 @@
-from typing import Any, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
+
+from django import template
 
 
 sq = "'"
@@ -66,7 +68,7 @@ def match_and_return_second(char: str, pairs: List[Tuple[str, str]]):
     return None
 
 # TODO: Handle correct string parsing, and raise exception on syntax error? (use parse_first_string)
-def smart_split(expression: str, seperator: str, delimiters: List[Tuple[str, str]]) -> Iterator[str]:
+def smart_split(expression: str, seperator: str, delimiters: List[Tuple[str, str]] = common_delimiters) -> Iterator[str]:
     i = 0
 
     end_delimiters_stack = []
@@ -88,6 +90,26 @@ def smart_split(expression: str, seperator: str, delimiters: List[Tuple[str, str
 
     yield expression[i:]
 
+def split_assignment(assignment: str) -> Tuple[str, str]:
+    iter = smart_split(assignment, '=')
+
+    try:
+        lhs = next(iter)
+        rhs = next(iter)
+        try:
+            next(iter)
+            raise template.TemplateSyntaxError(
+                "More than one assignment operator ('=') was seen while attempting to parse an assinment")
+        except StopIteration:
+            pass
+    except StopIteration:
+        raise template.TemplateSyntaxError('Error in parsing assignment, it should be in the form: lhs = rhs')
+    
+    return lhs, rhs
+
+def split_kwargs(assignments: Iterable[str]) -> Iterable[Tuple[str, str]]:
+    return (split_assignment(assignment) for assignment in assignments)
+
 def manual_non_empty_sum(iter):
     is_first: bool = True
     is_string: bool = False
@@ -95,7 +117,7 @@ def manual_non_empty_sum(iter):
         if is_first:
             sum = element
             is_first = False
-            
+
             if isinstance(element, str):
                 is_string = True
         else:

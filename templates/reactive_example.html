@@ -233,6 +233,30 @@ setTimeout(
     }, 1500);
 </script>
 
+{% reactdef rand_color 'rgb(255,255,255)' %}
+
+{% reacttag div style="padding-top: 5px; color:"+rand_color+";" %}
+This is text change its color randomally using reactive tag attribute.
+{% endreacttag %}
+
+<script>
+function getRandomInt(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min) + min); //The maximum is exclusive and the minimum is inclusive
+}
+
+function changeColorStep() {
+    {% reactset rand_color %}
+    'rgb(' + getRandomInt(0, 255) + ',' + getRandomInt(0, 255) + ',' + getRandomInt(0, 255) + ')'
+    {% endreactset %}
+    
+    setTimeout(changeColorStep, 1000);
+}
+
+setTimeout(changeColorStep, 1000);
+</script>
+
 {% endreactblock %}
 {% endreactblock %}
 
