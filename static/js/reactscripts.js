@@ -27,9 +27,9 @@ function __reactive_remove_node(self, node) {
         node.next.prev = node.prev;
 }
 
-var react_check_array_func = Array.isArray
-if (typeof react_check_array_func === 'undefined') {
-    react_check_array_func = function(obj) {
+var __reactive_check_array_func = Array.isArray
+if (typeof __reactive_check_array_func === 'undefined') {
+    __reactive_check_array_func = function(obj) {
       return Object.prototype.toString.call(obj) === '[object Array]';
     }
 }
@@ -70,19 +70,19 @@ class ReactVar {
     }
 
     set val(new_val) {
-        if (this.val !== new_val || (new_val && (new_val.constructor == Object || react_check_array_func(new_val)))) {
+        if (this.val !== new_val || (new_val && (new_val.constructor == Object || __reactive_check_array_func(new_val)))) {
             this._val = new_val;
             this.notify();
         }
     }
 }
 
-function react_print_html(obj) {
+function __reactive_print_html(obj) {
     function print_sub_element(obj) {
         if (typeof obj === "string")
             return "'" + obj + "'";
         else
-            return react_print_html(obj);
+            return __reactive_print_html(obj);
     }
 
     if (obj === null)
@@ -91,7 +91,7 @@ function react_print_html(obj) {
         return 'True';
     else if (obj === false)
         return 'False';
-    else if (react_check_array_func(obj)) {
+    else if (__reactive_check_array_func(obj)) {
         if (obj.length == 0)
             return "[]"
         // otherwise

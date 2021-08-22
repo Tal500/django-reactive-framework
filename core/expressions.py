@@ -39,7 +39,7 @@ class Expression:
         val_js, hooks = self.eval_js_and_hooks(react_context, delimiter)
         
         # TODO: HTML escaping in this JS method?
-        return f'react_print_html({val_js})', hooks
+        return f'__reactive_print_html({val_js})', hooks
 
 class SettableExpression(Expression):
     @abstractmethod
