@@ -8,50 +8,50 @@
 
 {% with test_template_var="success" %}
 
-{% reactblock %}
-{% reactblock %}
+{% #block %}
+{% #block %}
 Test1
-{% reactdef text_dsadf test_template_var %}
-{% reactdef test_var 'test' %}
-{% reactdef test_array ['str1','str2','str3'] %}
+{% #/def text_dsadf test_template_var %}
+{% #/def test_var 'test' %}
+{% #/def test_array ['str1','str2','str3'] %}
 <script>
-{% reactset test_var %}
-{% reactget test_var %} + '11'
-{% endreactset %}
+{% #set test_var %}
+{% #/get test_var %} + '11'
+{% /set %}
 </script>
 Test2
-{% reacttag span %}
-{% reactdef nested_var 'nested' %}
+{% #tag span %}
+{% #/def nested_var 'nested' %}
 {% for element in example_list %}
 {{ element }}
-{% reactprint test_var %}
+{% #/print test_var %}
 {% endfor %}
-{% reactprint 'Test3' %}
-{% reactprint nested_var %}
-{% endreacttag %}
+{% #/print 'Test3' %}
+{% #/print nested_var %}
+{% /tag %}
 
-{% reactdef test_bool True %}
-{% reactprint test_bool %}
+{% #/def test_bool True %}
+{% #/print test_bool %}
 
-{% reacttag span %}
-{% reactif test_bool %}
+{% #tag span %}
+{% #if test_bool %}
 Test4
-{% reactprint test_var %}
-{% endreactif %}
-{% endreacttag %}
+{% #/print test_var %}
+{% /if %}
+{% /tag %}
 
 {% if True %}
-{% reacttag span %}
-{% reactprint test_array %}
+{% #tag span %}
+{% #/print test_array %}
 
-{% reactfor element in test_array %}
-{% reactdef element2 2 %}
-{% reactdef element3 element %}
-{% reactprint element2 %}
-{% reactprint element3 %}
-{% endreactfor %}
+{% #for element in test_array %}
+{% #/def element2 2 %}
+{% #/def element3 element %}
+{% #/print element2 %}
+{% #/print element3 %}
+{% /for %}
 
-{% endreacttag %}
+{% /tag %}
 {% endif %}
 
 {% comment %}
@@ -59,29 +59,29 @@ Comment test
 {% endcomment %}
 
 <script>
-{% reactscript %}
-console.log({% reactget test_var %});
-{% endreactscript %}
+{%#redo%}
+console.log({% #/get test_var %});
+{%/redo%}
 
 setTimeout(
     function() {
-    {% reactset test_var %}
+    {% #set test_var %}
     "hey"
-    {% endreactset %}
+    {% /set %}
 
     setTimeout(
         function() {
-        {% reactset test_bool %}
+        {% #set test_bool %}
         false
-        {% endreactset %}
+        {% /set %}
         }, 2000);
     }, 2000);
 
 setTimeout(
     function() {
-    {% reactset test_array %}
+    {% #set test_array %}
     ['str1', 'str2']
-    {% endreactset %}
+    {% /set %}
     }, 1000);
 </script>
 
@@ -96,76 +96,76 @@ value: {{ elemen }}
 </ul>
 </section>
 
-{% reacttag section %}
+{% #tag section %}
 Dynamic array:
 <ul>
-{% reactfor element in test_array %}
+{% #for element in test_array %}
 <li>
-value: {% reactprint element %}
+value: {% #/print element %}
 </li>
-{% endreactfor %}
+{% /for %}
 </ul>
-{% endreacttag %}
+{% /tag %}
 
-{% reacttag section %}
+{% #tag section %}
 Even None is supported:
-{% reactdef test_none None %}
-{% reactdef test_null null %}
+{% #/def test_none None %}
+{% #/def test_null null %}
 <ul>
-<li>{% reactprint test_none %}</li>
-<li>{% reactprint test_null %}</li>
+<li>{% #/print test_none %}</li>
+<li>{% #/print test_null %}</li>
 </ul>
-{% endreacttag %}
+{% /tag %}
 
-{% reactdef number 3 %}
-{% reactdef greeting 'Hi' %}
+{% #/def number 3 %}
+{% #/def greeting 'Hi' %}
 
-{% reacttag p %}
+{% #tag p %}
 You may also use plus operator:<br />
-2+{% reactprint number %}={% reactprint 2+number %}<br />
-"{% reactprint greeting %}"+" "+"World"={% reactprint greeting+" "+"World" %}
-{% endreacttag %}
+2+{% #/print number %}={% #/print 2+number %}<br />
+"{% #/print greeting %}"+" "+"World"={% #/print greeting+" "+"World" %}
+{% /tag %}
 <script>
 setTimeout(
     function() {
-    {% reactset number %}{% reactget 4 %}{% endreactset %}
+    {% #set number %}{% #/get 4 %}{% /set %}
     
     setTimeout(
         function() {
-        {% reactset greeting %}'Hello'{% endreactset %}
+        {% #set greeting %}'Hello'{% /set %}
         }, 500);
     }, 1000);
 </script>
 
-{% reactdef test_json {v1:'2','v7':'3',nested:{A:1,B:2},arr:[{a:1,b:2},{c:3}]} %}
+{% #/def test_json {v1:'2','v7':'3',nested:{A:1,B:2},arr:[{a:1,b:2},{c:3}]} %}
 
-{% reacttag section %}
+{% #tag section %}
 You can also use JSON/dictionary values:
 <p>
-{% reactprint test_json %}
+{% #/print test_json %}
 </p>
-{% endreacttag %}
+{% /tag %}
 
 <script>
 setTimeout(
     function() {
-    {% reactget test_json %}.v10 = 5
+    {% #/get test_json %}.v10 = 5
 
-    {% reactset test_json %}
-    {% reactget test_json %}
-    {% endreactset %}
+    {% #set test_json %}
+    {% #/get test_json %}
+    {% /set %}
     
     setTimeout(
         function() {
-        {% reactset test_json.v7 %}4{% endreactset %}
+        {% #set test_json.v7 %}4{% /set %}
         }, 1000);
     }, 1200);
 </script>
 
 
-{% reactdef people [{first:'John',last:'Smith',age:40},{first:'Kristen',last:'Perkins',age:27}] %}
+{% #/def people [{first:'John',last:'Smith',age:40},{first:'Kristen',last:'Perkins',age:27}] %}
 
-{% reacttag section %}
+{% #tag section %}
 You may even render a table using an array of dictionary:
 <table>
 <tr>
@@ -173,71 +173,71 @@ You may even render a table using an array of dictionary:
 <th>Last Name</th>
 <th>Age</th>
 </tr>
-{% reactfor person in people %}
-{% reacttag tr %}
-<td>{% reactprint person.first %}</td>
-<td>{% reactprint person.last %}</td>
-<td>{% reactprint person.age %}</td>
-{% endreacttag %}
-{% endreactfor %}
+{% #for person in people %}
+{% #tag tr %}
+<td>{% #/print person.first %}</td>
+<td>{% #/print person.last %}</td>
+<td>{% #/print person.age %}</td>
+{% /tag %}
+{% /for %}
 </table>
-{% endreacttag %}
+{% /tag %}
 
 <script>
 setTimeout(
     function() {
-    {% reactget people %}.push({first:'Marc',last:'Mcdowell',age:58})
+    {% #/get people %}.push({first:'Marc',last:'Mcdowell',age:58})
 
-    {% reactset people %}
-    {% reactget people %}
-    {% endreactset %}
+    {% #set people %}
+    {% #/get people %}
+    {% /set %}
     }, 1500);
 </script>
 
-{% reacttag section %}
+{% #tag section %}
 You can have a tag inside another tag:
-Test var array is: {% reactprint test_array %}
-{% reacttag div style="color: red;" %}
-Test var value is: {% reactprint test_var %}
-{% endreacttag %}
-{% endreacttag %}
+Test var array is: {% #/print test_array %}
+{% #tag div style="color: red;" %}
+Test var value is: {% #/print test_var %}
+{% /tag %}
+{% /tag %}
 
 
-{% reactdef nested_array [[1,2,3],[11,12,13],[21,22,23]] %}
+{% #/def nested_array [[1,2,3],[11,12,13],[21,22,23]] %}
 
-{% reacttag div style="padding-top: 5px;" %}
+{% #tag div style="padding-top: 5px;" %}
 And also a for inside another for loop:
 
 <ul>
-{% reactfor array in nested_array %}
+{% #for array in nested_array %}
 <li>
-The {% reactprint array %} is listed:
+The {% #/print array %} is listed:
 <ul>
-{% reactfor element in array %}
+{% #for element in array %}
 <li>
-{% reactprint element %}
+{% #/print element %}
 </li>
-{% endreactfor %}
+{% /for %}
 </ul>
 </li>
-{% endreactfor %}
+{% /for %}
 </ul>
-{% endreacttag %}
+{% /tag %}
 
 <script>
 setTimeout(
     function() {
-    {% reactset nested_array %}
+    {% #set nested_array %}
     [[1,2,3,4],[11,12,13,14],[21,22,23,24],[31,32,33,34]]
-    {% endreactset %}
+    {% /set %}
     }, 1500);
 </script>
 
-{% reactdef rand_color 'rgb(255,255,255)' %}
+{% #/def rand_color 'rgb(255,255,255)' %}
 
-{% reacttag div style="padding-top: 5px; color:"+rand_color+";" %}
+{% #tag div style="padding-top: 5px; color:"+rand_color+";" %}
 This is text change its color randomally using reactive tag attribute.
-{% endreacttag %}
+{% /tag %}
 
 <script>
 function getRandomInt(min, max) {
@@ -247,9 +247,9 @@ function getRandomInt(min, max) {
 }
 
 function changeColorStep() {
-    {% reactset rand_color %}
+    {% #set rand_color %}
     'rgb(' + getRandomInt(0, 255) + ',' + getRandomInt(0, 255) + ',' + getRandomInt(0, 255) + ')'
-    {% endreactset %}
+    {% /set %}
     
     setTimeout(changeColorStep, 1000);
 }
@@ -257,8 +257,8 @@ function changeColorStep() {
 setTimeout(changeColorStep, 1000);
 </script>
 
-{% endreactblock %}
-{% endreactblock %}
+{% /block %}
+{% /block %}
 
 {% endwith %}
 

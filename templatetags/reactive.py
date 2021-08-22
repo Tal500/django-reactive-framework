@@ -20,7 +20,7 @@ with open(Path(__file__).resolve().parent.parent / 'resources/reactscripts.js', 
     reactive_script = f.read()
 
 class ReactBlockNode(ReactNode):
-    tag_name = 'reactblock'
+    tag_name = 'block'
     class Context(ReactContext):
         def __init__(self, parent, id: str, need_load_scripts: bool):
             super().__init__(id=id, parent=parent)
@@ -58,9 +58,9 @@ class ReactBlockNode(ReactNode):
         
         return ReactBlockNode.Context(parent_context, id, need_load_scripts)
 
-@register.tag(ReactBlockNode.tag_name)
+@register.tag('#' + ReactBlockNode.tag_name)
 def do_reactblock(parser, token):
-    nodelist = parser.parse(('endreactblock',))
+    nodelist = parser.parse(('/' + ReactBlockNode.tag_name,))
     parser.delete_first_token()
 
     return ReactBlockNode(nodelist)
@@ -68,7 +68,7 @@ def do_reactblock(parser, token):
 reactcontent_node_str = 'reactcontent_node'
 
 class ReactDefNode(ReactNode):
-    tag_name = 'reactdef'
+    tag_name = 'def'
 
     # TODO: Support reactive definition (i.e. update value when expression value is changed)
     class Context(ReactRerenderableContext):
@@ -104,7 +104,7 @@ class ReactDefNode(ReactNode):
 
         return ReactDefNode.Context(parent_context, self.var_name, var_val_expression)
 
-@register.tag(ReactDefNode.tag_name)
+@register.tag('#/' + ReactDefNode.tag_name)
 def do_reactdef(parser: template.base.Parser, token: template.base.Token):
     # TODO: Make the difference between bounded and unbounded expressions(i.e. if reactivity change them).
     try:
@@ -117,7 +117,7 @@ def do_reactdef(parser: template.base.Parser, token: template.base.Token):
     return ReactDefNode(var_name, parse_expression(var_val_expression))
 
 class ReactTagNode(ReactNode):
-    tag_name = 'reacttag'
+    tag_name = 'tag'
 
     class RenderData(ReactRerenderableContext):
         def __init__(self, parent: ReactContext, id: str, html_tag: str, html_attributes: Dict[str, Expression]):
@@ -245,7 +245,7 @@ class ReactTagNode(ReactNode):
 
         return ReactTagNode.RenderData(parent_context, id, self.html_tag, parsed_html_attributes)
 
-@register.tag(ReactTagNode.tag_name)
+@register.tag('#' + ReactTagNode.tag_name)
 def do_reacttag(parser: template.base.Parser, token: template.base.Token):
     bits = list(smart_split(token.contents, ' ', common_delimiters))
 
@@ -261,14 +261,13 @@ def do_reacttag(parser: template.base.Parser, token: template.base.Token):
     html_attributes_unparsed = split_kwargs(remaining_bits)
     html_attributes = { attribute: parse_expression(val_unparsed) for attribute, val_unparsed in html_attributes_unparsed }
 
-    nodelist = parser.parse(('endreacttag',))
+    nodelist = parser.parse(('/' + ReactTagNode.tag_name,))
     parser.delete_first_token()
 
     return ReactTagNode(nodelist, html_tag, html_attributes)
 
 class ReactForNode(ReactNode):
-    tag_name = 'reactfor'
-    tag_name_enclose = 'endreactfor'
+    tag_name = 'for'
 
     class Context(ReactRerenderableContext):
         def __init__(self, id: str, parent: ReactContext, var_name: str, iter_expression: Expression):
@@ -459,7 +458,7 @@ class ReactForNode(ReactNode):
         self.iter_expression = iter_expression
         super().__init__(nodelist=nodelist)
 
-@register.tag(ReactForNode.tag_name)
+@register.tag('#' + ReactForNode.tag_name)
 def do_reactfor(parser: template.base.Parser, token: template.base.Token):
     bits = list(smart_split(token.contents, ' ', common_delimiters))
 
@@ -479,14 +478,13 @@ def do_reactfor(parser: template.base.Parser, token: template.base.Token):
     
     iter_expression = bits[3]
 
-    nodelist = parser.parse((ReactForNode.tag_name_enclose,))
+    nodelist = parser.parse(('/' + ReactForNode.tag_name,))
     parser.delete_first_token()
 
     return ReactForNode(nodelist, var_name, parse_expression(iter_expression))
 
 class ReactIfNode(ReactNode):
-    tag_name = 'reactif'
-    tag_name_enclose = 'endreactif'
+    tag_name = 'if'
 
     class Context(ReactRerenderableContext):
         def __init__(self, id: str, parent: ReactContext, expression: Expression):
@@ -535,7 +533,7 @@ class ReactIfNode(ReactNode):
 
         return ReactIfNode.Context(id=id, parent=parent_context, expression=expression)
 
-@register.tag(ReactIfNode.tag_name)
+@register.tag('#' + ReactIfNode.tag_name)
 def do_reactif(parser: template.base.Parser, token: template.base.Token):
     # TODO: add support for else and elif in the future
 
@@ -549,13 +547,13 @@ def do_reactif(parser: template.base.Parser, token: template.base.Token):
 
     expression = bits[1]
 
-    nodelist = parser.parse((ReactIfNode.tag_name_enclose,))
+    nodelist = parser.parse(('/' + ReactIfNode.tag_name,))
     parser.delete_first_token()
 
     return ReactIfNode(nodelist, parse_expression(expression))
 
 class ReactPrintNode(ReactNode):
-    tag_name = 'reactprint'
+    tag_name = 'print'
 
     class Context(ReactRerenderableContext):
         def __init__(self, parent, expression: Expression):
@@ -591,7 +589,7 @@ class ReactPrintNode(ReactNode):
         return ReactPrintNode.Context(parent_context, expression)
 
 # TODO: Maybe instead use just the {% ... %} tag and just track it and render it from outside?
-@register.tag(ReactPrintNode.tag_name)
+@register.tag('#/' + ReactPrintNode.tag_name)
 def do_reactprint(parser: template.base.Parser, token: template.base.Token):
     bits = list(smart_split(token.contents, ' ', common_delimiters))
 
@@ -608,7 +606,7 @@ def do_reactprint(parser: template.base.Parser, token: template.base.Token):
     return ReactPrintNode(parse_expression(expression))
 
 class ReactGetNode(ReactNode):
-    tag_name = 'reactget'
+    tag_name = 'get'
 
     class Context(ReactRerenderableContext):
         def __init__(self, parent, expression: Expression):
@@ -634,7 +632,7 @@ class ReactGetNode(ReactNode):
 
         return ReactGetNode.Context(parent_context, expression)
 
-@register.tag(ReactGetNode.tag_name)
+@register.tag('#/' + ReactGetNode.tag_name)
 def do_reactget(parser: template.base.Parser, token: template.base.Token):
     """Get current present value, in js expression"""
 
@@ -651,8 +649,7 @@ def do_reactget(parser: template.base.Parser, token: template.base.Token):
     return ReactGetNode(parse_expression(var_expression))
 
 class ReactSetNode(ReactNode):
-    tag_name = 'reactset'
-    tag_name_enclose = 'endreactset'
+    tag_name = 'set'
 
     class Context(ReactContext):
         def __init__(self, parent, settable_expression: SettableExpression):
@@ -675,7 +672,7 @@ class ReactSetNode(ReactNode):
 
         return ReactSetNode.Context(parent_context, settable_expression)
 
-@register.tag(ReactSetNode.tag_name)
+@register.tag('#' + ReactSetNode.tag_name)
 def do_reactset(parser: template.base.Parser, token: template.base.Token):
     """Set current present value to a js expression"""
 
@@ -691,7 +688,7 @@ def do_reactset(parser: template.base.Parser, token: template.base.Token):
 
     var_expression = bits[1]
     
-    nodelist: template.NodeList = parser.parse((ReactSetNode.tag_name_enclose,))
+    nodelist: template.NodeList = parser.parse(('/' + ReactSetNode.tag_name,))
     parser.delete_first_token()
 
     expression = parse_expression(var_expression)
@@ -703,9 +700,8 @@ def do_reactset(parser: template.base.Parser, token: template.base.Token):
 
     return ReactSetNode(nodelist, expression)
 
-class ReactScriptNode(ReactNode):
-    tag_name = 'reactscript'
-    tag_name_enclose = 'endreactscript'
+class ReactRedoNode(ReactNode):
+    tag_name = 'redo'
 
     class Context(ReactContext):
         def __init__(self, id: str, parent: ReactContext):
@@ -729,10 +725,10 @@ class ReactScriptNode(ReactNode):
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
         id = f'script_{next_id_by_context(template_context, "__react_script")}'
 
-        return ReactScriptNode.Context(id=id, parent=parent_context)
+        return ReactRedoNode.Context(id=id, parent=parent_context)
 
-@register.tag(ReactScriptNode.tag_name)
-def do_reactscript(parser: template.base.Parser, token: template.base.Token):
+@register.tag('#' + ReactRedoNode.tag_name)
+def do_reactredo(parser: template.base.Parser, token: template.base.Token):
     bits = list(smart_split(token.contents, ' ', common_delimiters))
 
     if len(bits) != 1:
@@ -744,7 +740,7 @@ def do_reactscript(parser: template.base.Parser, token: template.base.Token):
     # TODO: Forbit puttting reactivescript inside another reactivescript
     # TODO: Allow only get&set reactive tags as children, or other non-reactive ones, maybe by using "in_script" field in context?
 
-    nodelist = parser.parse((ReactScriptNode.tag_name_enclose,))
+    nodelist = parser.parse(('/' + ReactRedoNode.tag_name,))
     parser.delete_first_token()
 
-    return ReactScriptNode(nodelist)
+    return ReactRedoNode(nodelist)
