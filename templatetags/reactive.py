@@ -10,7 +10,7 @@ from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
-from ..core.expressions import EscapingContainerExpression, Expression, IntExpression, SettableExpression, StringExpression, SumExpression, VariableExpression, parse_expression
+from ..core.expressions import EscapingContainerExpression, Expression, IntExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, VariableExpression, parse_expression
 
 from ..core.utils import split_kwargs, str_repr_s, smart_split, common_delimiters, dq
 
@@ -158,6 +158,12 @@ class ReactTagNode(ReactNode):
 
             return SumExpression(list(itertools.chain.from_iterable(exp_iter)))
         
+        def make_control_var(self) -> ReactVar:
+            control_var = ReactVar(self.control_var_name, value_to_expression({'first': True}))
+            self.add_var(control_var)
+
+            return control_var
+        
         def render_html(self, subtree: Optional[List]) -> str:
             computed_attributes_expression = self.compute_attribute_expression()
 
@@ -165,8 +171,7 @@ class ReactTagNode(ReactNode):
         
             inner_html_output = self.render_html_inside(subtree)
 
-            control_var = ReactVar(self.control_var_name, value_to_expression(dict()))
-            self.add_var(control_var)
+            self.make_control_var()
 
             return '<' + self.html_tag + attribute_str + \
                 '>' + inner_html_output + '</' + self.html_tag + '>'
@@ -178,8 +183,7 @@ class ReactTagNode(ReactNode):
 
             inner_js_expression, hooks_inside = self.render_js_and_hooks_inside(subtree)
 
-            control_var = ReactVar(self.control_var_name, value_to_expression(dict()))
-            self.add_var(control_var)
+            self.make_control_var()
 
             js_expression = \
                 f"{str_repr_s('<' + self.html_tag)}+{attribute_str}+'>'+" + \
@@ -202,13 +206,17 @@ class ReactTagNode(ReactNode):
 
             hooks = set(hooks_inside)
 
-            control_var = ReactVar(self.control_var_name, value_to_expression(dict()))
-            self.add_var(control_var)
+            control_var = self.make_control_var()
+
+            first_expression = SettablePropertyExpression(VariableExpression(self.control_var_name), ['first'])
 
             # TODO: Handle the unsupported style and events setting in old IE versions?
             
             script.initial_post_calc = '( () => { function proc() {' + \
+                f'if(!{first_expression.eval_js_and_hooks(self)[0]}) {{\n' + \
                 script.destructor + \
+                '\n' + first_expression.js_set(self, 'false') + \
+                '\n}\n' +\
                 script.initial_pre_calc + \
                 f'document.getElementById({id_js_expression}).innerHTML = ' + js_rerender_expression + ';\n' + \
                 script.initial_post_calc + '\n' + \

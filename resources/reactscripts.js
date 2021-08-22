@@ -45,9 +45,7 @@ function __reactive_data_attach(self, cb, invoke_if_changed_from_initial) {
 }
 
 function __reactive_data_detach(self, attachment) {
-    if (attachment) {
-        __reactive_remove_node(self.attached,attachment)
-    }
+    __reactive_remove_node(self.attached,attachment)
 }
 
 function __reactive_data_notify(self) {
