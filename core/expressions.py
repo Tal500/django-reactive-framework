@@ -237,7 +237,7 @@ class SumExpression(Expression):
     
     @staticmethod
     def try_parse(expression: str) -> Optional['SumExpression']:
-        parts = list(smart_split(expression, '+', common_delimiters))
+        parts = list(smart_split(expression, '+', common_delimiters, skip_blank=False))
 
         if len(parts) > 1:
             return SumExpression([parse_expression(part) for part in parts])
@@ -285,7 +285,7 @@ class ArrayExpression(Expression):
 
         expression = expression[1:-1]
 
-        parts = smart_split(expression, ',', common_delimiters)
+        parts = smart_split(expression, ',', common_delimiters, skip_blank=False)
 
         return ArrayExpression([parse_expression(part) for part in parts])
 
@@ -330,7 +330,7 @@ class DictExpression(Expression):
 
         expression = expression[1:-1]
 
-        parts = smart_split(expression, ',', common_delimiters)
+        parts = smart_split(expression, ',', common_delimiters, skip_blank=False)
 
         def split_part(part: str) -> Tuple[str, Expression]:
             seperator = part.find(':')
@@ -454,7 +454,7 @@ class PropertyExpression(Expression):
     
     @staticmethod
     def try_parse(expression: str) -> Optional['PropertyExpression']:
-        parts = list(smart_split(expression, '.', common_delimiters))
+        parts = list(smart_split(expression, '.', common_delimiters, skip_blank=False))
 
         if len(parts) <= 1:
             return None
