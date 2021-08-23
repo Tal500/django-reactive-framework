@@ -47,6 +47,9 @@ def parse_first_string(expression: str, delimiter: str) -> Optional[Tuple[str, i
         else:
             output.append(char)
             i += 1
+    
+    # otherwise (expression was ended before delimiter)
+    return None
 
 def parse_string(expression: str, delimiter: str) -> Optional[str]:
     if result := parse_first_string(expression, delimiter):
@@ -57,38 +60,59 @@ def parse_string(expression: str, delimiter: str) -> Optional[str]:
 
     return None
 
-common_delimiters = [('(', ')'), ('[', ']'), ('{', '}'), ('"', '"'), ("'", "'")]
+common_delimiters = [
+    ('(', ')', None),
+    ('[', ']', None),
+    ('{', '}', None),
+    ('"', '"', lambda expression: parse_first_string(expression, '"')),
+    ("'", "'", lambda expression: parse_first_string(expression, "'"))]
 
-def match_and_return_second(char: str, pairs: List[Tuple[str, str]]):
-    for first, second in pairs:
-        if char == first:
-            return second
+def match_first(char: str, tuples: List[Tuple]):
+    for t in tuples:
+        if char == t[0]:
+            return t
     # otherwise
 
     return None
 
-# TODO: Handle correct string parsing, and raise exception on syntax error? (use parse_first_string)
 def smart_split(expression: str, seperator: str,
-    delimiters: List[Tuple[str, str]] = common_delimiters, skip_blank: bool = True) -> Iterator[str]:
+    delimiters: List[Tuple[str, str, Any]] = common_delimiters, skip_blank: bool = True) -> Iterator[str]:
     i = 0
+    loc = 0
 
     end_delimiters_stack = []
 
-    for loc, char in enumerate(expression):
+    def process_delimiter(tuple, j: int):
+        section = expression[j:]
+        begin_delimiter, end_delimiter, processor = tuple
+        if processor is None:
+            end_delimiters_stack.append(end_delimiter)
+            return j + 1
+        else:
+            result: Optional[Tuple[str, int]] = processor(section)
+            if result is None:
+                raise template.TemplateSyntaxError(f'Cannot extract starting substring from: {section}')
+            else:
+                assert(0 != result[1])
+                return j + result[1]
+
+    while loc < len(expression):
+        char = expression[loc]
+
         if len(end_delimiters_stack) == 0:
             if char == seperator and len(end_delimiters_stack) == 0:
                 if i != loc or (not skip_blank):
                     yield expression[i:loc]
                 i = loc + 1
-                continue
+            elif tuple := match_first(char, delimiters):
+                loc = process_delimiter(tuple, loc) - 1
         else:
             if char == end_delimiters_stack[-1]:
                 end_delimiters_stack.pop()
-                continue
-        # otherwise
-
-        if end_delimiter := match_and_return_second(char, delimiters):
-            end_delimiters_stack.append(end_delimiter)\
+            elif tuple := match_first(char, delimiters):
+                loc = process_delimiter(tuple, loc) - 1
+        
+        loc += 1
 
     yield expression[i:]
 
