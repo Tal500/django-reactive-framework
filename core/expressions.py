@@ -1,10 +1,10 @@
 from abc import abstractmethod
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from django import template
 
 from .base import ReactContext, ReactData, ReactValType, ReactHook, ReactVar, value_to_expression
-from .utils import manual_non_empty_sum, str_repr, str_repr_s, parse_string, smart_split, common_delimiters, sq
+from .utils import manual_non_empty_sum, remove_whitespaces_on_boundaries, str_repr, str_repr_s, parse_string, smart_split, common_delimiters, sq
 
 class Expression:
     """ An immutable structure for holding expressions. """
@@ -20,7 +20,7 @@ class Expression:
         return False
 
     @abstractmethod
-    def reduce(self, template_context: template.Context):
+    def reduce(self, template_context: template.Context) -> 'Expression':
         """ Return a reduced expression with template context variables subtituted. """
         pass
 
@@ -412,6 +412,30 @@ class VariableExpression(SettableExpression):
         else:
             return None
 
+class NativeVariableExpression(SettableExpression):
+    def __init__(self, var_name: str, initial_value: Any = None):
+        assert(" " not in var_name)
+        self.var_name = var_name
+        self.initial_value = initial_value
+    
+    def __str__(self):
+        return self.var_name
+    
+    def reduce(self, template_context: template.Context):
+        return self
+    
+    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+        return self.initial_value
+
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+        return self.var_name, []
+    
+    def js_set(self, react_context: Optional[ReactContext], js_expression: str):
+        return f'{self.var_name}={js_expression};'
+    
+    def js_notify(self, react_context: Optional[ReactContext]) -> str:
+        return ''
+
 class PropertyExpression(Expression):
     def __init__(self, root_expression: Expression, key_path: List[str]):
         # TODO: Support also "[]" and not only "."
@@ -546,18 +570,6 @@ class EscapingContainerExpression(Expression):
         js_expression = f'({inner_js_expression}).toString().replace(/{delimiter_escaped}/g, {str_repr(delimiter_escaped, delimiter)})'
         
         return js_expression, hooks
-
-# TODO: Put it in utils
-def remove_whitespaces_on_boundaries(s: str):
-    for i in range(len(s)):
-        if s[i] not in [' ', '\t', '\n']:
-            break
-    
-    for j in reversed(range(i, len(s))):
-        if s[j] not in [' ', '\t', '\n']:
-            break
-    
-    return s[i:j+1]
 
 def parse_expression(expression: str):
     expression = remove_whitespaces_on_boundaries(expression)

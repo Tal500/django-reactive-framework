@@ -153,3 +153,50 @@ def manual_non_empty_sum(iter):
             sum = sum + element
     
     return sum
+
+whitespaces = [' ', '\t', '\n']
+
+def remove_whitespaces_on_boundaries(s: str) -> str:
+    for i in range(len(s)):
+        if s[i] not in whitespaces:
+            break
+    
+    if i == len(s) - 1 and s[i] in whitespaces:
+        return ''
+    # otherwise
+
+    for j in range(len(s) - 1, i - 1, -1):
+        if s[j] not in whitespaces:
+            break
+    
+    return s[i:j+1]
+
+def reduce_nodelist(nodelist: template.NodeList) -> template.NodeList:
+    """
+    A function which trims whitespaces and comment nodes from a nodelist.
+    Notice that this function might remove a relevant regular html space ' ', 
+      so use with care.
+    """
+
+    new_nodelist = template.NodeList()
+    for node in nodelist:
+        if isinstance(node, template.defaulttags.CommentNode):
+            continue
+        elif isinstance(node, template.base.TextNode):
+            print('str before:', node.s)
+            test = remove_whitespaces_on_boundaries(node.s)
+            print('str after:', test)
+            if not test:
+                print('skipping', node.s)
+                continue
+        
+        new_nodelist.append(node)
+    
+    return new_nodelist
+
+def is_iterable_empty(iterable: Iterable) -> bool:
+    for e in iterable:
+        return False
+    # otherwise
+    
+    return True

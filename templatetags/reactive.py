@@ -10,9 +10,9 @@ from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
-from ..core.expressions import EscapingContainerExpression, Expression, IntExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, VariableExpression, parse_expression
+from ..core.expressions import EscapingContainerExpression, Expression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, VariableExpression, parse_expression
 
-from ..core.utils import split_kwargs, str_repr_s, smart_split, common_delimiters, dq
+from ..core.utils import is_iterable_empty, reduce_nodelist, split_kwargs, str_repr_s, smart_split, common_delimiters, dq
 
 register = template.Library()
 
@@ -191,6 +191,12 @@ class ReactTagNode(ReactNode):
             
             return js_expression, []
         
+        def set_attribute_js_expression(self, element_js: str, attribute: str, js_expression: str) -> str:
+            if attribute.startswith('data-'):
+                return f"{element_js}.setAttribute({attribute}, {js_expression});"
+            else:
+                return f"{element_js}.{attribute} = {js_expression};"
+
         def render_script(self, subtree: Optional[List]) -> str:
             script = self.render_script_inside(subtree)
             
@@ -211,10 +217,7 @@ class ReactTagNode(ReactNode):
             first_expression = SettablePropertyExpression(VariableExpression(self.control_var_name), ['first'])
 
             def change_attribute(id_js_expression: str, attribute: str, js_expression: str):
-                if attribute.startswith('data-'):
-                    return f"() => {{ document.getElementById({id_js_expression}).setAttribute({attribute}, {js_expression});}}"
-                else:
-                    return f"() => {{ document.getElementById({id_js_expression}).{attribute} = {js_expression};}}"
+                return f"() => {{ {self.set_attribute_js_expression(f'document.getElementById({id_js_expression})', attribute, js_expression)} }}"
 
             # TODO: Handle the unsupported style and events setting in old IE versions?
             
@@ -233,6 +236,7 @@ class ReactTagNode(ReactNode):
                 for attribute, (js_expression, _hooks) in attribute_js_expressions_and_hooks.items())) + \
                 ';\n' + \
                 '\n'.join((f'{control_var.js_get()}.attachment_content_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
+                script.initial_post_calc + \
                 '\n})();'
             
             script.initial_pre_calc = ''
@@ -282,9 +286,12 @@ class ReactForNode(ReactNode):
     tag_name = 'for'
 
     class Context(ReactRerenderableContext):
-        def __init__(self, id: str, parent: ReactContext, var_name: str, iter_expression: Expression):
+        def __init__(self, id: str, parent: ReactContext, var_name: str, iter_expression: Expression,
+            key_expression: Optional[Expression]):
+
             self.var_name: str = var_name
             self.iter_expression: Expression = iter_expression
+            self.key_expression: Optional[Expression] = key_expression
             self.control_var_name: str = f'__react_control_{id}'
             super().__init__(id=id, parent=parent, fully_reactive=True)
     
@@ -311,14 +318,16 @@ class ReactForNode(ReactNode):
 
             iters: List[Dict[str, ReactValType]] = []
             html_outputs: List[str] = []
+            
             for i, element_val in enumerate(iter_val_initial):
                 self.compute_initial = True
-
-                iter_id_var = ReactVar('__react_iter_id', IntExpression(i))
-                self.add_var(iter_id_var)
                 
                 iter_var = ReactVar(self.var_name, value_to_expression(element_val))
                 self.add_var(iter_var)
+
+                iter_id_var = ReactVar('__react_iter_id',
+                    SumExpression([StringExpression('key_'), self.key_expression]) if self.key_expression else IntExpression(i))
+                self.add_var(iter_id_var)
 
                 html_output = self.render_html_inside(subtree)
                 html_outputs.append(html_output)
@@ -332,13 +341,14 @@ class ReactForNode(ReactNode):
                 self.clear_render()
             
             control_data = {'last_length': len(iters), 'iters': iters}
+            if self.key_expression:
+                control_data['key_table'] = {}
 
             control_var = ReactVar(self.control_var_name, value_to_expression(control_data))
             
             self.add_var(control_var)
             
             return ''.join(html_outputs)
-        
         
         def get_def(self, control_var: ReactVar, var: ReactVar, other_js_expression: Optional[str] = None):
             return f'const {var.js()} = ' + \
@@ -347,11 +357,11 @@ class ReactForNode(ReactNode):
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             iter_val_js, iter_hooks = self.iter_expression.eval_js_and_hooks(self)
 
-            iter_id_var = ReactVar('__react_iter_id', None)
-            self.add_var(iter_id_var)
-
             iter_var = ReactVar(self.var_name, None)
             self.add_var(iter_var)
+
+            iter_id_var = ReactVar('__react_iter_id', None)
+            self.add_var(iter_id_var)
 
             js_section_rerender_expression, hooks_inside_unfiltered = self.render_js_and_hooks_inside(subtree)
 
@@ -377,24 +387,29 @@ class ReactForNode(ReactNode):
             else:
                 js_rerender_expression = None
             
-            return js_rerender_expression, (hook for hook in hooks if hook not in vars)
+            return js_rerender_expression, \
+                (hook for hook in hooks if (hook not in vars)) if self.key_expression is None else []
 
         def render_script(self, subtree: Optional[List]) -> ResorceScript:
-            iter_id_var = ReactVar('__react_iter_id', None)
-            self.add_var(iter_id_var)
-
             iter_var = ReactVar(self.var_name, None)
             self.add_var(iter_var)
+
+            iter_id_var = ReactVar('__react_iter_id',
+                SumExpression([StringExpression('key_'), self.key_expression]) if \
+                    self.key_expression else NativeVariableExpression('i'))
+            self.add_var(iter_id_var)
 
             script = self.render_script_inside(subtree)
             
             self.clear_render()
 
-            iter_id_var = ReactVar('__react_iter_id', None)
-            self.add_var(iter_id_var)
-
             iter_var = ReactVar(self.var_name, None)
             self.add_var(iter_var)
+
+            iter_id_var = ReactVar('__react_iter_id',
+                SumExpression([StringExpression('key_'), self.key_expression]) if \
+                    self.key_expression else NativeVariableExpression('i'))
+            self.add_var(iter_id_var)
 
             js_section_rerender_expression, hooks_inside_unfiltered = self.render_js_and_hooks_inside(subtree)
 
@@ -423,6 +438,44 @@ class ReactForNode(ReactNode):
             def get_reactive_js(var: ReactVar, other_js_expression: Optional[str] = None):
                 return f'var_{var.js()}:' + (var.reactive_val_js(self) if other_js_expression is None else other_js_expression)
 
+            if self.key_expression:
+                tag_context: ReactTagNode.RenderData = subtree[0][0]
+                tag_subtree = subtree[0][1]
+
+                computed_attributes = tag_context.compute_attributes()
+
+                tag_id_js = computed_attributes["id"].eval_js_and_hooks(self)[0]
+            
+                self.clear_render()
+                tag_inner_js, tag_hooks = tag_context.render_js_and_hooks_inside(tag_subtree)
+                assert(is_iterable_empty(tag_hooks))
+
+                update_for_code = \
+                f'const react_iter = {iter_val_js};// TODO: Call destructor for the old iterations\n' + \
+                'if (react_iter.length != 0) {// TODO: Handle also the case of empty\n' + \
+                'var i = 0;\n' + \
+                'var current_old_element = null;\n' + \
+                f'if ({control_var.js_get()}.iters.length != 0) {{\n' + \
+                self.get_def(control_var, iter_id_var) + '\n' + \
+                f'current_old_element = document.getElementById({tag_id_js});\n' + \
+                '}\n' + \
+                'for (; i < react_iter.length; ++i) {\n' + \
+                self.get_def(control_var, iter_id_var) + '\n' + \
+                f'const current_element = document.getElementById({tag_id_js});\n' + \
+                'if (current_element === null) {\n' + \
+                f'current_element = document.createElement(\'{tag_context.html_tag}\');\n' + \
+                '\n'.join(tag_context.set_attribute_js_expression("current_element", attribute, val.eval_js_and_hooks(self)[0]) \
+                    for attribute, val in computed_attributes.items()) + \
+                f'current_element.innerHTML = {tag_inner_js};// TODO: Call tag pre&post scripts somehow\n' + \
+                '}\n' + \
+                'if (current_old_element !== null) {// TODO: Handle if it was empty already\n' + \
+                'if (current_element !== current_old_element) {\n' + \
+                'current_element.parentNode.insertBefore(current_element, current_old_element);\n' + \
+                '} else {' + \
+                'current_old_element = current_element.nextSibiling;\n' + \
+                '} } \n' + \
+                '} }'
+
             script.initial_pre_calc = '( () => {\n' + \
                 f'// For loop initial pre calc\n' + \
                 f'const react_iter = {iter_val_js};\n' + \
@@ -435,8 +488,8 @@ class ReactForNode(ReactNode):
                 f'const {iter_var.js()} = {iter_var.reactive_val_js(self, "react_iter[i]")};\n' + \
                 f'if (length_changed) {{\n' + \
                 f'{control_var.js_get()}.iters.push({{' + \
-                ','.join(chain((get_reactive_js(iter_var, iter_var.js()), get_reactive_js(iter_id_var, '__reactive_data(i)')), \
-                    (get_reactive_js(var) for var in filter((iter_id_var).__ne__, vars_but_iter)))) + \
+                ','.join(chain((get_reactive_js(iter_var, iter_var.js()),), \
+                    (get_reactive_js(var) for var in vars_but_iter))) + \
                 '} ); } else {\n' + \
                 get_set(iter_var, iter_var.js()) + '\n' + \
                 '\n'.join(get_set(var) for var in vars_but_iter) + \
@@ -448,35 +501,54 @@ class ReactForNode(ReactNode):
             script.initial_post_calc = '( () => {\n' + \
                 f'// For loop initial post calc\n' + \
                 f'const react_iter = {iter_val_js};\n' + \
+                (f'{control_var.js_get()}.key_table = {{}};\n' + \
+                'function update_for() {\n' + \
+                update_for_code + \
+                '\n}\n' + \
+                '\n'.join((f'{control_var.js_get()}.attachment_{hook.get_name()} = {hook.js_attach("update_for", True)};' \
+                    for hook in iter_hooks)) + \
+                '\n'
+                if self.key_expression else '') + \
                 'for (var i = 0; i < react_iter.length; ++i) {\n' + \
-                '\n' + defs + '\n' + script.initial_post_calc + '} } )();'
+                defs + '\n' + \
+                (f'{control_var.js_get()}.key_table[{iter_id_var.js_get()}] = {control_var.js_get()}.iters[i];\n'
+                if self.key_expression else '') + \
+                script.initial_post_calc + '} } )();'
             
             script.destructor = '( () => {' + \
                 f'// For loop destructor\n' + \
                 f'for (var i = 0; i < {control_var.js_get()}.iters.length; ++i) {{\n' + \
+                '\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_{hook.get_name()}') for hook in iter_hooks)) + \
                 '\n' + defs + '\n' + script.destructor + '} } )();'
 
             return script
 
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
         iter_expression: Expression = self.iter_expression.reduce(template_context)
+        key_expression: Optional[Expression] = (self.key_expression.reduce(template_context) if
+            self.key_expression is not None else None)
 
         id = f'for_{next_id_by_context(template_context, "__react_for")}'
 
-        return ReactForNode.Context(id=id, parent=parent_context, var_name=self.var_name, iter_expression=iter_expression)
+        return ReactForNode.Context(id=id, parent=parent_context, var_name=self.var_name, iter_expression=iter_expression,
+            key_expression=key_expression)
     
-    def __init__(self, nodelist: template.NodeList, var_name: str, iter_expression: Expression):
-        self.var_name = var_name
-        self.iter_expression = iter_expression
+    def __init__(self, nodelist: template.NodeList, var_name: str, iter_expression: Expression,
+        key_expression: Optional[Expression]):
+
+        self.var_name: str = var_name
+        self.iter_expression: Expression = iter_expression
+        self.key_expression: Optional[Expression] = key_expression
         super().__init__(nodelist=nodelist)
 
 @register.tag('#' + ReactForNode.tag_name)
 def do_reactfor(parser: template.base.Parser, token: template.base.Token):
     bits = list(smart_split(token.contents, ' ', common_delimiters))
 
-    if len(bits) != 4:
+    if len(bits) != 4 and len(bits) != 6:
         raise template.TemplateSyntaxError(
-            "%r tag requires exactly four arguments (with 'in' as the third one)" % token.contents.split()[0]
+            "%r tag requires exactly four or six arguments (with 'in' as the third one, and optionally 'by as the fifth one)" %
+            token.contents.split()[0]
         )
     # otherwise
 
@@ -490,10 +562,26 @@ def do_reactfor(parser: template.base.Parser, token: template.base.Token):
     
     iter_expression = bits[3]
 
+    if len(bits) == 6:
+        by_str = bits[4]
+        if in_str != 'in':
+            raise template.TemplateSyntaxError(
+                "%r tag requires that the fifth arguments will be 'by', or nothing at all" % token.contents.split()[0]
+            )
+        key_expression = bits[5]
+    else:
+        key_expression = None
+
     nodelist = parser.parse(('/' + ReactForNode.tag_name,))
     parser.delete_first_token()
 
-    return ReactForNode(nodelist, var_name, parse_expression(iter_expression))
+    if key_expression:
+        nodelist = reduce_nodelist(nodelist)
+        if len(nodelist) != 1 and not isinstance(nodelist[0], ReactTagNode):
+            raise template.TemplateSyntaxError('Error: Keyed loops must have one one child node which is a reactive tag node.')
+
+    return ReactForNode(nodelist, var_name, parse_expression(iter_expression),
+        key_expression=(parse_expression(key_expression) if key_expression is not None else None))
 
 class ReactIfNode(ReactNode):
     tag_name = 'if'

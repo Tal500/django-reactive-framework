@@ -253,6 +253,15 @@ function changeColorStep() {
 setTimeout(changeColorStep, 1000);
 </script>
 
+{% #tag div style="padding-top: 5px;" %}
+You can also have a keyed for loop:
+{% #for element in test_array by element %}
+{% #tag p %}
+{% #/print element %}
+{% /tag %}
+{% /for %}
+{% /tag %}
+
 {% /block %}
 {% /block %}
 
