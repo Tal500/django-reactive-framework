@@ -210,6 +210,12 @@ class ReactTagNode(ReactNode):
 
             first_expression = SettablePropertyExpression(VariableExpression(self.control_var_name), ['first'])
 
+            def change_attribute(id_js_expression: str, attribute: str, js_expression: str):
+                if attribute.startswith('data-'):
+                    return f"() => {{ document.getElementById({id_js_expression}).setAttribute({attribute}, {js_expression});}}"
+                else:
+                    return f"() => {{ document.getElementById({id_js_expression}).{attribute} = {js_expression};}}"
+
             # TODO: Handle the unsupported style and events setting in old IE versions?
             
             script.initial_post_calc = '( () => { function proc() {' + \
@@ -222,8 +228,7 @@ class ReactTagNode(ReactNode):
                 script.initial_post_calc + '\n' + \
                 ';}\n' + \
                 '\n'.join( chain.from_iterable((f'{control_var.js_get()}.attachment_attribute_{hook.get_name()} = ' + \
-                hook.js_attach(f"() => {{ document.getElementById({id_js_expression}).{attribute} = " + \
-                js_expression + ";}", True) \
+                hook.js_attach(change_attribute(id_js_expression, attribute, js_expression), True) \
                 for hook in _hooks) \
                 for attribute, (js_expression, _hooks) in attribute_js_expressions_and_hooks.items())) + \
                 ';\n' + \
