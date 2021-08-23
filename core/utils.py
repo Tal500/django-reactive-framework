@@ -68,7 +68,8 @@ def match_and_return_second(char: str, pairs: List[Tuple[str, str]]):
     return None
 
 # TODO: Handle correct string parsing, and raise exception on syntax error? (use parse_first_string)
-def smart_split(expression: str, seperator: str, delimiters: List[Tuple[str, str]] = common_delimiters) -> Iterator[str]:
+def smart_split(expression: str, seperator: str,
+    delimiters: List[Tuple[str, str]] = common_delimiters, skip_blank: bool = True) -> Iterator[str]:
     i = 0
 
     end_delimiters_stack = []
@@ -76,7 +77,8 @@ def smart_split(expression: str, seperator: str, delimiters: List[Tuple[str, str
     for loc, char in enumerate(expression):
         if len(end_delimiters_stack) == 0:
             if char == seperator and len(end_delimiters_stack) == 0:
-                yield expression[i:loc]
+                if i != loc or (not skip_blank):
+                    yield expression[i:loc]
                 i = loc + 1
                 continue
         else:
@@ -91,7 +93,7 @@ def smart_split(expression: str, seperator: str, delimiters: List[Tuple[str, str
     yield expression[i:]
 
 def split_assignment(assignment: str) -> Tuple[str, str]:
-    iter = smart_split(assignment, '=')
+    iter = smart_split(assignment, '=', skip_blank=False)
 
     try:
         lhs = next(iter)
