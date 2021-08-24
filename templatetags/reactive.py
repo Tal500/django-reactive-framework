@@ -434,7 +434,6 @@ class ReactForNode(ReactNode):
             self.add_var(control_var)
 
             defs = '\n'.join(self.get_def(control_var, var) for var in vars)
-            defs_but_iter = '\n'.join(self.get_def(control_var, var) for var in vars_but_iter)
 
             def get_set(var: ReactVar, other_js_expression: Optional[str] = None):
                 if other_js_expression is None and var.expression is None:
@@ -539,16 +538,14 @@ class ReactForNode(ReactNode):
                 '}\n' + \
                 'for (var i = 0; i < react_iter.length; ++i) {\n' + \
                     f'const {iter_var.js()} = {iter_var.reactive_val_js(self, "react_iter[i]")};\n' + \
+                    '\n'.join((f'const {var.js()} = {var.reactive_val_js(self)};' for var in vars_but_iter)) + '\n' + \
                     f'if (length_changed) {{\n' + \
                     f'{control_var.js_get()}.iters.push({{' + \
-                    ','.join(chain((get_reactive_js(iter_var, iter_var.js()),), \
-                        (get_reactive_js(var) for var in vars_but_iter))) + \
+                    ','.join((f'var_{var.js()}:{var.js()}' for var in vars)) + \
                     '} ); } else {\n' + \
-                    get_set(iter_var, iter_var.js()) + '\n' + \
-                    '\n'.join(get_set(var) for var in vars_but_iter) + \
+                    '\n'.join(get_set(var, var.js_get()) for var in vars) + '\n' \
                     '}\n' + \
-                    defs_but_iter + '\n' + \
-                    script.initial_pre_calc + \
+                    script.initial_pre_calc + '\n' \
                 '} } )();'
             
             script.initial_post_calc = '( () => {\n' + \
@@ -709,12 +706,27 @@ class ReactPrintNode(ReactNode):
     tag_name = 'print'
 
     class Context(ReactRerenderableContext):
-        def __init__(self, parent, expression: Expression):
+        def __init__(self, parent, id: str, expression: Expression):
             self.expression: Expression = expression
-            super().__init__(id='', parent=parent, fully_reactive=True)
+            super().__init__(id=id, parent=parent, fully_reactive=True)
+    
+        def var_js(self, var):
+            return f'{var.name}_{self.id}'
+
+        def make_vars(self) -> Tuple[ReactVar, ReactVar]:
+            control_var = ReactVar('print_control', value_to_expression({}))
+            self.add_var(control_var)
+
+            print_var = ReactVar('print_var', self.expression)
+            self.add_var(print_var)
+
+            return control_var, print_var
 
         def render_html(self, subtree: List) -> str:
             val_initial = self.expression.eval_initial(self)
+
+            self.compute_initial = True
+            control_var, print_var = self.make_vars()
 
             # Change from python to js if it is bool or None
             if val_initial is None:
@@ -729,17 +741,46 @@ class ReactPrintNode(ReactNode):
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             # TODO: HTML escaping?
+            
+            control_var, print_var = self.make_vars()
 
-            return self.expression.eval_js_html_output_and_hooks(self)
+            return VariableExpression(print_var.name).eval_js_html_output_and_hooks(self)[0], [print_var]
+
+        def render_script(self, subtree: Optional[List]) -> str:
+            # TODO: HTML escaping?
+            js_html_expression, hooks = self.expression.eval_js_html_output_and_hooks(self)
+            
+            control_var, print_var = self.make_vars()
+
+            script = ResorceScript()
+            
+            script.initial_post_calc = \
+                '{\n' + \
+                    'function proc() {\n' + \
+                        print_var.js_set(js_html_expression) + \
+                    '}\n' + \
+                    '\n'.join((f'{control_var.js_get()}.attachment_{hook.get_name()} = {hook.js_attach("proc", True)};' \
+                        for hook in hooks)) + \
+                '\n}\n'
+            
+            script.destructor = \
+                '{\n' + \
+                    '\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_{hook.get_name()}') \
+                        for hook in hooks)) + \
+                '\n}\n'
+            
+            return script
 
     def __init__(self, expression: Expression):
         self.expression = expression
         super().__init__(nodelist=None)
 
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
+        id = f'print_{next_id_by_context(template_context, "__react_print")}'
+
         expression: Expression = self.expression.reduce(template_context)
 
-        return ReactPrintNode.Context(parent_context, expression)
+        return ReactPrintNode.Context(parent_context, id, expression)
 
 # TODO: Maybe instead use just the {% ... %} tag and just track it and render it from outside?
 @register.tag('#/' + ReactPrintNode.tag_name)

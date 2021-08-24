@@ -149,6 +149,9 @@ def manual_non_empty_sum(iter):
         else:
             if is_string:
                 element = str(element)
+            elif isinstance(element, str):
+                sum = str(sum)
+                is_string = True
             
             sum = sum + element
     
