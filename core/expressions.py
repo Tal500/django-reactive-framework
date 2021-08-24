@@ -527,7 +527,9 @@ class NewReactDataExpression(Expression):
         self.data: ReactData = data
     
     def __str__(self):
-        return f'ReactData(name={self.data.get_name()},expression={self.data.expression},tracked_initial={self.data.tracked_initial})'
+        return f'ReactData(name={self.data.get_name()},expression={self.data.expression}' + \
+            (f',tracked_initial={self.data.tracked_initial}' if hasattr(self.data, 'tracked_initial') else '') + \
+            ')'
     
     def reduce(self, template_context: template.Context):
         return self
