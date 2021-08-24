@@ -262,6 +262,113 @@ You can also have a keyed for loop:
 {% /for %}
 {% /tag %}
 
+{% #/def interactive_people_array [{first:'John',last:'Smith',age: 40}] %}
+
+{% #tag div style="padding-top: 5px;" %}
+Or even a more advanced one:
+(make sure that first names are unique, or else you'll have an error)
+
+<form>
+New person:
+<input type="text" id="first_name" />
+<input type="text" id="last_name" />
+<input type="number" id="age" />
+<input type="button" value="Insert to the End" onclick="insert_person_to_the_end();" />
+</form>
+
+<table>
+<tr>
+<th>First Name</th>
+<th>Last Name</th>
+<th>Age</th>
+<th>Notes</th>
+<th>Actions</th>
+</tr>
+{% #for person in interactive_people_array by person.first %}
+{% #tag tr %}
+<td>{% #/print person.first %}</td>
+<td>{% #/print person.last %}</td>
+<td>{% #/print person.age %}</td>
+<td>
+<form>
+<input type="text" placeholder="Notes" />
+</form>
+</td>
+<td>
+<form>
+<input type="button" value="Increase Age" onclick="increase_age_by_first_name('{% #/print person.first %}');" />
+<input type="button" value="Delete" onclick="remove_by_first_name('{% #/print person.first %}');" />
+<input type="button" value="Add Above" onclick="add_above_by_first_name('{% #/print person.first %}');" />
+<input type="button" value="Add Below" onclick="add_below_by_first_name('{% #/print person.first %}');" />
+</form>
+</td>
+{% /tag %}
+{% /for %}
+</table>
+{% /tag %}
+
+<script>
+function get_current_person() {
+    return {
+        first: document.getElementById('first_name').value,
+        last: document.getElementById('last_name').value,
+        age: document.getElementById('age').value,
+    }
+}
+
+function insert_person_to_the_end() {
+    person = get_current_person();
+    {% #/get interactive_people_array %}.push(person);
+    {% #/notify interactive_people_array %}
+}
+
+function find_by_first_name(first_name) {
+    for (var i = 0; i < {% #/get interactive_people_array %}.length; ++i) {
+        if ({% #/get interactive_people_array %}[i].first == first_name) {
+            return i;
+        }
+    }
+    // otherwise
+
+    throw 'Cannot find first name: ' + first_name;
+}
+
+function increase_age_by_first_name(first_name) {
+    const i = find_by_first_name(first_name);
+
+    ++{% #/get interactive_people_array %}[i].age;
+    {% #/notify interactive_people_array %}
+}
+
+function remove_by_first_name(first_name) {
+    const i = find_by_first_name(first_name);
+
+    {% #/get interactive_people_array %}.splice(i, 1);
+    {% #/notify interactive_people_array %}
+}
+
+function add_above_by_first_name(first_name) {
+    const i = find_by_first_name(first_name);
+    person = get_current_person();
+
+    {% #/get interactive_people_array %}.splice(i, 0, person);
+    {% #/notify interactive_people_array %}
+}
+
+function add_below_by_first_name(first_name) {
+    const i = find_by_first_name(first_name);
+    person = get_current_person();
+
+    if (i == {% #/get interactive_people_array %}.length - 1) {
+        {% #/get interactive_people_array %}.push(person);
+    } else {
+        {% #/get interactive_people_array %}.splice(i+1, 0, person);
+    }
+
+    {% #/notify interactive_people_array %}
+}
+</script>
+
 {% /block %}
 {% /block %}
 
