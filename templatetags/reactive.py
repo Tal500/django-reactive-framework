@@ -12,7 +12,7 @@ from django.templatetags.static import static
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
 from ..core.expressions import EscapingContainerExpression, Expression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, VariableExpression, parse_expression
 
-from ..core.utils import is_iterable_empty, reduce_nodelist, split_kwargs, str_repr_s, smart_split, common_delimiters, dq
+from ..core.utils import clean_js_execution_expression, is_iterable_empty, reduce_nodelist, split_kwargs, str_repr_s, smart_split, common_delimiters, dq
 
 register = template.Library()
 
@@ -221,7 +221,9 @@ class ReactTagNode(ReactNode):
 
             # TODO: Handle the unsupported style and events setting in old IE versions?
             
-            script.initial_post_calc = '( () => { function proc() {' + \
+            script.initial_post_calc = '( () => {\n' + \
+                '// Tag post calc\n' + \
+                'function proc() {\n' + \
                 f'if(!{first_expression.eval_js_and_hooks(self)[0]}) {{\n' + \
                 script.destructor + \
                 '\n' + first_expression.js_set(self, 'false') + \
@@ -241,7 +243,8 @@ class ReactTagNode(ReactNode):
             
             script.initial_pre_calc = ''
 
-            script.destructor = '( () => {' + \
+            script.destructor = '( () => {\n' + \
+                '// Tag destructor\n' + \
                 '\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_content_{hook.get_name()}') for hook in hooks)) + \
                 '\n' + script.destructor + '} )();'
             
@@ -350,9 +353,12 @@ class ReactForNode(ReactNode):
             
             return ''.join(html_outputs)
         
-        def get_def(self, control_var: ReactVar, var: ReactVar, other_js_expression: Optional[str] = None):
-            return f'const {var.js()} = ' + \
-                f'{(control_var.js_get() + ".iters[i].var_" + var.js()) if (other_js_expression is None) else other_js_expression};'
+        def get_def(self, control_var: ReactVar, var: ReactVar,
+            other_js_expression: Optional[str] = None, iteration_expression: str = None):
+
+            val = (iteration_expression if (iteration_expression is not None) else (control_var.js_get() + ".iters[i]")) + \
+                ".var_" + var.js() if (other_js_expression is None) else other_js_expression
+            return f'const {var.js()} = {val};'
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             iter_val_js, iter_hooks = self.iter_expression.eval_js_and_hooks(self)
@@ -425,6 +431,7 @@ class ReactForNode(ReactNode):
             self.add_var(control_var)
 
             defs = '\n'.join(self.get_def(control_var, var) for var in vars)
+            defs_but_iter = '\n'.join(self.get_def(control_var, var) for var in vars_but_iter)
 
             def get_set(var: ReactVar, other_js_expression: Optional[str] = None):
                 if other_js_expression is None and var.expression is None:
@@ -439,6 +446,10 @@ class ReactForNode(ReactNode):
                 return f'var_{var.js()}:' + (var.reactive_val_js(self) if other_js_expression is None else other_js_expression)
 
             if self.key_expression:
+                defs_but_iter_and_id_keyed = '\n'.join(
+                    self.get_def(control_var, var, iteration_expression='__reactive_iter_store') \
+                    for var in vars_but_iter if var is not iter_id_var)
+
                 tag_context: ReactTagNode.RenderData = subtree[0][0]
                 tag_subtree = subtree[0][1]
 
@@ -447,34 +458,74 @@ class ReactForNode(ReactNode):
                 tag_id_js = computed_attributes["id"].eval_js_and_hooks(self)[0]
             
                 self.clear_render()
-                tag_inner_js, tag_hooks = tag_context.render_js_and_hooks_inside(tag_subtree)
-                assert(is_iterable_empty(tag_hooks))
+
+                # Redefine vars after clear
+                iter_var = ReactVar(self.var_name, None)
+                self.add_var(iter_var)
+
+                iter_id_var = ReactVar('__react_iter_id',
+                    SumExpression([StringExpression('key_'), self.key_expression]) if \
+                        self.key_expression else NativeVariableExpression('i'))
+                self.add_var(iter_id_var)
+
+                tag_inner_js = tag_context.render_js_and_hooks_inside(tag_subtree)[0]
 
                 update_for_code = \
-                f'const react_iter = {iter_val_js};// TODO: Call destructor for the old iterations\n' + \
-                'if (react_iter.length != 0) {// TODO: Handle also the case of empty\n' + \
-                'var i = 0;\n' + \
-                'var current_old_element = null;\n' + \
-                f'if ({control_var.js_get()}.iters.length != 0) {{\n' + \
-                self.get_def(control_var, iter_id_var) + '\n' + \
-                f'current_old_element = document.getElementById({tag_id_js});\n' + \
-                '}\n' + \
-                'for (; i < react_iter.length; ++i) {\n' + \
-                self.get_def(control_var, iter_id_var) + '\n' + \
-                f'const current_element = document.getElementById({tag_id_js});\n' + \
-                'if (current_element === null) {\n' + \
-                f'current_element = document.createElement(\'{tag_context.html_tag}\');\n' + \
-                '\n'.join(tag_context.set_attribute_js_expression("current_element", attribute, val.eval_js_and_hooks(self)[0]) \
-                    for attribute, val in computed_attributes.items()) + \
-                f'current_element.innerHTML = {tag_inner_js};// TODO: Call tag pre&post scripts somehow\n' + \
-                '}\n' + \
-                'if (current_old_element !== null) {// TODO: Handle if it was empty already\n' + \
-                'if (current_element !== current_old_element) {\n' + \
-                'current_element.parentNode.insertBefore(current_element, current_old_element);\n' + \
-                '} else {' + \
-                'current_old_element = current_element.nextSibiling;\n' + \
-                '} } \n' + \
-                '} }'
+                f'const react_iter = {iter_val_js};\n' + \
+                f'const __reactive_old_iters = {control_var.js_get()}.iters;// TODO: Call destructor for the old iterations\n' + \
+                f'{control_var.js_get()}.iters = [];\n' + \
+                'if (react_iter.length != 0) {// TODO: Handle also the case of empty, and handle if it was empty already.\n' + \
+                    'var current_old_element = null;\n' + \
+                    f'if (__reactive_old_iters.length != 0) {{// TODO: Handle if it was empty already\n' + \
+                        f'const {iter_var.js()} = {iter_var.reactive_val_js(self, "react_iter[0]")};\n' + \
+                        f'const {iter_id_var.js()} = {iter_id_var.reactive_val_js(self)};\n' + \
+                        f'current_old_element = document.getElementById({tag_id_js});\n' + \
+                    '}\n' + \
+                    'for (var i = 0; i < react_iter.length; ++i) {\n' + \
+                        f'const {iter_var.js()} = {iter_var.reactive_val_js(self, "react_iter[i]")};\n' + \
+                        f'const {iter_id_var.js()} = {iter_id_var.reactive_val_js(self)};\n' + \
+                        f'var __reactive_iter_store = {control_var.js_get()}.key_table[{iter_id_var.js_get()}];\n' + \
+                        'if (__reactive_iter_store) {\n' + \
+                            f'const current_element = document.getElementById({tag_id_js});\n' + \
+                            'if (current_element === null) {\n' + \
+                                'throw \'current_element is null!\';\n' + \
+                            '}\n' + \
+                            'if (current_element !== current_old_element) {\n' + \
+                            'current_old_element.parentNode.insertBefore(current_element, current_old_element);\n' + \
+                            '} else {\n' + \
+                            'current_old_element = current_element.nextSibling;\n' + \
+                            '}\n' + \
+                            '__reactive_iter_store.keep = true;\n' + \
+                        '} else {\n' + \
+                            '__reactive_iter_store = {' + \
+                            ','.join(chain((get_reactive_js(iter_var, iter_var.js()),), \
+                                (get_reactive_js(var) for var in vars_but_iter))) + \
+                            '};\n' + \
+                            f'{control_var.js_get()}.key_table[{iter_id_var.js_get()}] = __reactive_iter_store;\n' + \
+                            defs_but_iter_and_id_keyed + '\n' + \
+                            script.initial_pre_calc + '\n' + \
+                            f'const current_element = document.createElement(\'{tag_context.html_tag}\');\n' + \
+                            '\n'.join(tag_context.set_attribute_js_expression("current_element", attribute,
+                                val.eval_js_and_hooks(self)[0]) for attribute, val in computed_attributes.items()) + '\n' + \
+                            f'current_element.innerHTML = {tag_inner_js};\n' + \
+                            'current_old_element.parentNode.insertBefore(current_element, current_old_element);\n' + \
+                            script.initial_post_calc + '\n' \
+                        '}\n' + \
+                        f'({control_var.js_get()}).iters.push(__reactive_iter_store);\n' + \
+                    '}\n' + \
+                    'for (var i = 0; i < __reactive_old_iters.length; ++i)\n {' + \
+                        'if (__reactive_old_iters[i].keep) {\n' + \
+                            '__reactive_old_iters[i].keep = undefined;\n' + \
+                        '} else {\n' + \
+                            '\n'.join(self.get_def(control_var, var, iteration_expression='__reactive_old_iters[i]') \
+                                for var in vars) + \
+                            script.destructor + '\n' + \
+                            f'const element = document.getElementById({tag_id_js});\n' + \
+                            'element.parentNode.removeChild(element);\n' + \
+                            f'delete {control_var.js_get()}.key_table[{iter_id_var.js_get()}];\n' + \
+                        '}\n' + \
+                    '}\n' + \
+                '}'
 
             script.initial_pre_calc = '( () => {\n' + \
                 f'// For loop initial pre calc\n' + \
@@ -485,17 +536,17 @@ class ReactForNode(ReactNode):
                 f'{control_var.js_get()}.iters = [];\n' + \
                 '}\n' + \
                 'for (var i = 0; i < react_iter.length; ++i) {\n' + \
-                f'const {iter_var.js()} = {iter_var.reactive_val_js(self, "react_iter[i]")};\n' + \
-                f'if (length_changed) {{\n' + \
-                f'{control_var.js_get()}.iters.push({{' + \
-                ','.join(chain((get_reactive_js(iter_var, iter_var.js()),), \
-                    (get_reactive_js(var) for var in vars_but_iter))) + \
-                '} ); } else {\n' + \
-                get_set(iter_var, iter_var.js()) + '\n' + \
-                '\n'.join(get_set(var) for var in vars_but_iter) + \
-                '}\n' + \
-                '\n'.join(self.get_def(control_var, var) for var in vars_but_iter) + '\n' + \
-                script.initial_pre_calc + \
+                    f'const {iter_var.js()} = {iter_var.reactive_val_js(self, "react_iter[i]")};\n' + \
+                    f'if (length_changed) {{\n' + \
+                    f'{control_var.js_get()}.iters.push({{' + \
+                    ','.join(chain((get_reactive_js(iter_var, iter_var.js()),), \
+                        (get_reactive_js(var) for var in vars_but_iter))) + \
+                    '} ); } else {\n' + \
+                    get_set(iter_var, iter_var.js()) + '\n' + \
+                    '\n'.join(get_set(var) for var in vars_but_iter) + \
+                    '}\n' + \
+                    defs_but_iter + '\n' + \
+                    script.initial_pre_calc + \
                 '} } )();'
             
             script.initial_post_calc = '( () => {\n' + \

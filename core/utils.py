@@ -183,11 +183,8 @@ def reduce_nodelist(nodelist: template.NodeList) -> template.NodeList:
         if isinstance(node, template.defaulttags.CommentNode):
             continue
         elif isinstance(node, template.base.TextNode):
-            print('str before:', node.s)
             test = remove_whitespaces_on_boundaries(node.s)
-            print('str after:', test)
             if not test:
-                print('skipping', node.s)
                 continue
         
         new_nodelist.append(node)
@@ -200,3 +197,6 @@ def is_iterable_empty(iterable: Iterable) -> bool:
     # otherwise
     
     return True
+
+def clean_js_execution_expression(js_block: str) -> str:
+    return f'( () => {{\n{js_block}\n}} )();'
