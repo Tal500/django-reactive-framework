@@ -295,12 +295,12 @@ New person:
 </form>
 </td>
 <td>
-<form>
+{% #tag form %}
 <input type="button" value="Increase Age" onclick="increase_age_by_first_name('{% #/print person.first %}');" />
 <input type="button" value="Delete" onclick="remove_by_first_name('{% #/print person.first %}');" />
 <input type="button" value="Add Above" onclick="add_above_by_first_name('{% #/print person.first %}');" />
 <input type="button" value="Add Below" onclick="add_below_by_first_name('{% #/print person.first %}');" />
-</form>
+{% /tag %}
 </td>
 {% /tag %}
 {% /for %}
