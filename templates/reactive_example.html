@@ -286,9 +286,9 @@ New person:
 </tr>
 {% #for person in interactive_people_array by person.first %}
 {% #tag tr %}
-<td>{% #/print person.first %}</td>
-<td>{% #/print person.last %}</td>
-<td>{% #/print person.age %}</td>
+{% #tag td %}{% #/print person.first %}{% /tag %}
+{% #tag td %}{% #/print person.last %}{% /tag %}
+{% #tag td %}{% #/print person.age %}{% /tag %}
 <td>
 <form>
 <input type="text" placeholder="Notes" />

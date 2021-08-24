@@ -495,6 +495,7 @@ class ReactForNode(ReactNode):
                         'current_old_element = current_element.nextSibling;\n' + \
                         '}\n' + \
                         '__reactive_iter_store.keep = true;\n' + \
+                        iter_var.js_set(iter_var.js_get(), f'__reactive_iter_store.var_{iter_var.js()}') + '\n' + \
                     '} else {\n' + \
                         '__reactive_iter_store = {' + \
                         ','.join(chain((get_reactive_js(iter_var, iter_var.js()),), \
