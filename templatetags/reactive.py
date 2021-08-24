@@ -173,8 +173,11 @@ class ReactTagNode(ReactNode):
 
             self.make_control_var()
 
-            return '<' + self.html_tag + attribute_str + \
-                '>' + inner_html_output + '</' + self.html_tag + '>'
+            if self.html_tag.endswith('/'):
+                return '<' + self.html_tag[:-1] + attribute_str + ' />'
+            else:
+                return '<' + self.html_tag + attribute_str + \
+                    '>' + inner_html_output + '</' + self.html_tag + '>'
         
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             computed_attributes_expression = self.compute_attribute_expression()
