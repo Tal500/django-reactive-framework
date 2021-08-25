@@ -237,7 +237,7 @@ class ReactTagNode(ReactNode):
                 f'if(!{first_expression.eval_js_and_hooks(self)[0]}) {{\n' + \
                 script.destructor + \
                 '\n' + first_expression.js_set(self, 'false') + \
-                '\n}\n' +\
+                '\n}\n' + \
                 script.initial_pre_calc + \
                 (f'document.getElementById({id_js_expression}).innerHTML = ' + js_rerender_expression + ';\n'
                 if not self.self_enclosed else '') + \
