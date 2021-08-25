@@ -243,8 +243,6 @@ class ReactTagNode(ReactNode):
                 '\n'.join((f'{control_var.js_get()}.attachment_content_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
                 script.initial_post_calc + \
                 '\n})();'
-            
-            script.initial_pre_calc = ''
 
             script.destructor = '( () => {\n' + \
                 '// Tag destructor\n' + \
