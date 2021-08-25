@@ -206,7 +206,11 @@ class ReactContext:
     def render_html(self, subtree: Optional[List]) -> str:
         pass
 
-    def render_html_inside(self, subtree: List) -> str:
+    def render_html_inside(self, subtree: Optional[List]) -> str:
+        if subtree is None:
+            return None
+        # otherwise
+
         strings: List[str] = []
         for element in subtree:
             if isinstance(element, str):
@@ -225,7 +229,7 @@ class ReactContext:
     def render_script(self, subtree: Optional[List]) -> ResorceScript:
         return self.render_script_inside(subtree)
 
-    def render_script_inside(self, subtree: List) -> ResorceScript:
+    def render_script_inside(self, subtree: Optional[List]) -> ResorceScript:
         if subtree is None:
             return ResorceScript()
         # otherwise
@@ -259,7 +263,11 @@ class ReactContext:
             destructor = '\n'.join(reversed(destructor_scripts)),
         )
     
-    def render_js_and_hooks_inside(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
+    def render_js_and_hooks_inside(self, subtree: Optional[List]) -> Tuple[str, Iterable[ReactHook]]:
+        if subtree is None:
+            return None, []
+        # otherwise
+
         js_and_hooks: List[str, Iterable[ReactHook]] = []
         for element in subtree:
             if isinstance(element, str):

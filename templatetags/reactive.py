@@ -120,8 +120,11 @@ class ReactTagNode(ReactNode):
     tag_name = 'tag'
 
     class RenderData(ReactRerenderableContext):
-        def __init__(self, parent: ReactContext, id: str, html_tag: str, html_attributes: Dict[str, Expression]):
+        def __init__(self, parent: ReactContext, id: str, self_enclosed: bool, html_tag: str,
+            html_attributes: Dict[str, Expression]):
+
             super().__init__(id=id, parent=parent, fully_reactive=True)
+            self.self_enclosed: bool = self_enclosed
             self.html_tag: str = html_tag
             self.control_var_name: str = f'__react_control_{id}'
             self.html_attributes: Dict[str, Expression] = html_attributes
@@ -173,8 +176,8 @@ class ReactTagNode(ReactNode):
 
             self.make_control_var()
 
-            if self.html_tag.endswith('/'):
-                return '<' + self.html_tag[:-1] + attribute_str + ' />'
+            if self.self_enclosed:
+                return '<' + self.html_tag + attribute_str + ' />'
             else:
                 return '<' + self.html_tag + attribute_str + \
                     '>' + inner_html_output + '</' + self.html_tag + '>'
@@ -188,9 +191,13 @@ class ReactTagNode(ReactNode):
 
             self.make_control_var()
 
-            js_expression = \
-                f"{str_repr_s('<' + self.html_tag)}+{attribute_str}+'>'+" + \
-                    inner_js_expression + f"+{str_repr_s('</' + self.html_tag + '>')}"
+            if self.self_enclosed:
+                js_expression = \
+                    f"{str_repr_s('<' + self.html_tag)}+{attribute_str}+' />'"
+            else:
+                js_expression = \
+                    f"{str_repr_s('<' + self.html_tag)}+{attribute_str}+'>'+" + \
+                        inner_js_expression + f"+{str_repr_s('</' + self.html_tag + '>')}"
             
             return js_expression, []
         
@@ -232,7 +239,8 @@ class ReactTagNode(ReactNode):
                 '\n' + first_expression.js_set(self, 'false') + \
                 '\n}\n' +\
                 script.initial_pre_calc + \
-                f'document.getElementById({id_js_expression}).innerHTML = ' + js_rerender_expression + ';\n' + \
+                (f'document.getElementById({id_js_expression}).innerHTML = ' + js_rerender_expression + ';\n'
+                if not self.self_enclosed else '') + \
                 script.initial_post_calc + '\n' + \
                 ';}\n' + \
                 '\n'.join( chain.from_iterable((f'{control_var.js_get()}.attachment_attribute_{hook.get_name()} = ' + \
@@ -251,8 +259,10 @@ class ReactTagNode(ReactNode):
             
             return script
     
-    def __init__(self, nodelist: template.NodeList, html_tag: str, html_attributes: Dict[str, Expression]):
-        self.nodelist = nodelist
+    def __init__(self, nodelist: Optional[template.NodeList], self_enclosed: bool, html_tag: str,
+        html_attributes: Dict[str, Expression]):
+        
+        self.self_enclosed: bool = self_enclosed
         self.html_tag: str = html_tag
         self.html_attributes = html_attributes
 
@@ -263,28 +273,42 @@ class ReactTagNode(ReactNode):
 
         parsed_html_attributes = {key: val.reduce(template_context) for key, val in self.html_attributes.items()}
 
-        return ReactTagNode.RenderData(parent_context, id, self.html_tag, parsed_html_attributes)
+        return ReactTagNode.RenderData(parent_context, id, self.self_enclosed, self.html_tag, parsed_html_attributes)
 
 @register.tag('#' + ReactTagNode.tag_name)
+@register.tag('#/' + ReactTagNode.tag_name)
 def do_reacttag(parser: template.base.Parser, token: template.base.Token):
     bits = list(smart_split(token.contents, ' ', common_delimiters))
 
+    tag = token.contents.split()[0]
+
     if len(bits) < 2:
         raise template.TemplateSyntaxError(
-            "%r tag requires at least two arguments" % token.contents.split()[0]
+            "%r tag requires at least two arguments" % tag
         )
     # otherwise
 
     html_tag = bits[1]
+    self_enclosed = False
+    if html_tag.endswith('/'):
+        self_enclosed = True
+        html_tag = html_tag[:-1]
 
     remaining_bits = bits[2:]
     html_attributes_unparsed = split_kwargs(remaining_bits)
     html_attributes = { attribute: parse_expression(val_unparsed) for attribute, val_unparsed in html_attributes_unparsed }
 
-    nodelist = parser.parse(('/' + ReactTagNode.tag_name,))
-    parser.delete_first_token()
+    if tag.startswith('#/') != self_enclosed:
+        raise template.TemplateSyntaxError('You need to use #/ instead of # on tag if and only if ' + \
+            'the html tag is self enclosed (and ended with / in html tag name).')
+    
+    if self_enclosed:
+        nodelist = None
+    else:
+        nodelist = parser.parse(('/' + ReactTagNode.tag_name,))
+        parser.delete_first_token()
 
-    return ReactTagNode(nodelist, html_tag, html_attributes)
+    return ReactTagNode(nodelist, self_enclosed, html_tag, html_attributes)
 
 class ReactForNode(ReactNode):
     tag_name = 'for'
