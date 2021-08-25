@@ -6,6 +6,18 @@
 
 {% block content %}
 
+<p id="js_status" style="color: green;">
+No JavaScript errors so far!
+</p>
+
+<script type="text/javascript">
+    window.onerror=function(msg) {
+        const element = document.getElementById('js_status');
+        element.innerHTML = 'JavaScript errors occured!';
+        element.style.color = 'red';
+    }
+</script>
+
 {% with test_template_var="success" %}
 
 {% #block %}
