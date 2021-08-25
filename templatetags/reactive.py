@@ -12,7 +12,7 @@ from django.templatetags.static import static
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
 from ..core.expressions import EscapingContainerExpression, Expression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, VariableExpression, parse_expression
 
-from ..core.utils import clean_js_execution_expression, is_iterable_empty, reduce_nodelist, split_kwargs, str_repr_s, smart_split, common_delimiters, dq
+from ..core.utils import reduce_nodelist, remove_whitespaces_on_boundaries, split_kwargs, str_repr_s, smart_split, common_delimiters, dq
 
 register = template.Library()
 
@@ -275,16 +275,25 @@ class ReactTagNode(ReactNode):
 
         return ReactTagNode.RenderData(parent_context, id, self.self_enclosed, self.html_tag, parsed_html_attributes)
 
+def parse_reacttag_internal(html_tag: str, bits_after: List[str], nodelist: template.NodeList):
+    html_attributes_unparsed = split_kwargs(bits_after)
+    html_attributes = { attribute: parse_expression(val_unparsed) for attribute, val_unparsed in html_attributes_unparsed }
+    
+    self_enclosed = (nodelist is None)
+
+    return ReactTagNode(nodelist, self_enclosed, html_tag, html_attributes)
+
 @register.tag('#' + ReactTagNode.tag_name)
 @register.tag('#/' + ReactTagNode.tag_name)
 def do_reacttag(parser: template.base.Parser, token: template.base.Token):
+
     bits = list(smart_split(token.contents, ' ', common_delimiters))
 
     tag = token.contents.split()[0]
 
     if len(bits) < 2:
         raise template.TemplateSyntaxError(
-            "%r tag requires at least two arguments" % tag
+            "%r tag requires at least one arguments" % tag
         )
     # otherwise
 
@@ -293,14 +302,15 @@ def do_reacttag(parser: template.base.Parser, token: template.base.Token):
     if html_tag.endswith('/'):
         self_enclosed = True
         html_tag = html_tag[:-1]
+    elif bits[-1] == '/':
+        self_enclosed = True
+        bits = bits[:-1]
 
     remaining_bits = bits[2:]
-    html_attributes_unparsed = split_kwargs(remaining_bits)
-    html_attributes = { attribute: parse_expression(val_unparsed) for attribute, val_unparsed in html_attributes_unparsed }
 
     if tag.startswith('#/') != self_enclosed:
         raise template.TemplateSyntaxError('You need to use #/ instead of # on tag if and only if ' + \
-            'the html tag is self enclosed (and ended with / in html tag name).')
+            'the html tag is self enclosed (i.e. ended with / in html tag name or at the last aurgument list).')
     
     if self_enclosed:
         nodelist = None
@@ -308,7 +318,144 @@ def do_reacttag(parser: template.base.Parser, token: template.base.Token):
         nodelist = parser.parse(('/' + ReactTagNode.tag_name,))
         parser.delete_first_token()
 
-    return ReactTagNode(nodelist, self_enclosed, html_tag, html_attributes)
+    return parse_reacttag_internal(html_tag, remaining_bits, nodelist)
+
+@register.tag('#')
+def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
+    bits = list(smart_split(token.contents, ' ', common_delimiters))
+
+    if len(bits) != 1:
+        raise template.TemplateSyntaxError(
+            "# tag requires no arguments"
+        )
+    
+    nodelist = parser.parse(('/',))
+    parser.delete_first_token()
+
+    if not nodelist:
+        raise template.TemplateSyntaxError(
+            'Child nodes of reactive generic block {% # %}...{% / %} is empty.'
+            )
+    
+    if not isinstance(nodelist[0], template.base.TextNode) or not nodelist[0].s:
+        raise template.TemplateSyntaxError(
+            'A reactive generic block {% # %}...{% / %} must start with non empty text, and not with django tags.'
+            )
+    
+    if not isinstance(nodelist[-1], template.base.TextNode) or not nodelist[-1].s:
+        raise template.TemplateSyntaxError(
+            'A reactive generic block {% # %}...{% / %} must be ended with non empty text, and not with django tags.'
+            )
+    
+    # if clean so far
+
+    start: str = nodelist[0].s
+
+    start = remove_whitespaces_on_boundaries(start, left=True, right=False)
+
+    if not start.startswith('<'):
+        raise template.TemplateSyntaxError(
+            'A reactive generic block {% # %}...{% / %} must be started with \'<\' (and possibly whitespaces before).'
+            )
+    
+    start = start[1:]
+    start_parts = list(smart_split(start, '>', skip_blank=False))
+    if len(start_parts) < 2:
+        raise template.TemplateSyntaxError(
+            'Missing \'>\' while parsimg a reactive generic block {% # %}...{% / %}'
+            )
+
+    start_bits = list(smart_split(start_parts[0], ' '))
+    if not start_bits:
+        raise template.TemplateSyntaxError(
+            'The first tag <...> is empty inside a reactive generic block {% # %}...{% / %}'
+            )
+
+    html_tag = start_bits[0]
+    bits_after = start_bits[1:]
+
+    self_enclosed = False
+    if html_tag.endswith('/'):
+        html_tag = html_tag[:-1]
+        self_enclosed = True
+    
+    start_seperated_by_slash = list(smart_split(start_parts[0], '/', skip_blank=False))
+    if len(start_seperated_by_slash) > 2:
+        raise template.TemplateSyntaxError(
+            'Found more than one slash (\'/\') in start tag <..> while parsimg a reactive generic block {% # %}...{% / %}'
+            )
+    elif len(start_seperated_by_slash) == 2 and not self_enclosed:
+        if start_bits[-1].endswith('/'):
+            if start_bits[-1] == '/':
+                bits_after = bits_after[:-1]
+            else:
+                bits_after[-1] = bits_after[-1][:-1]
+            
+            self_enclosed = True
+        else:
+            raise template.TemplateSyntaxError(
+                'Found more than one slash (\'/\') which is not in the right place in start tag <..> ' + \
+                'while parsimg a reactive generic block {% # %}...{% / %}'
+                )
+    
+    if html_tag == 'script':
+        raise template.TemplateSyntaxError(
+            'Script interactive tag is not supported!'
+            )
+
+    start = start[len(start_parts[0])+1:]
+    nodelist[0].s = start
+    
+    if len(nodelist) == 1:
+        end: str = start
+    else:
+        end: str = nodelist[-1].s
+    
+    end = remove_whitespaces_on_boundaries(end, left=False, right=True)
+
+    if end:
+        if self_enclosed:
+            raise template.TemplateSyntaxError(
+                'Found a slash (\'/\') in start tag <..> while parsimg a reactive generic block {% # %}...{% / %}, ' + \
+                'which indicate that the tag is self enclosing, but found more HTML code or or non-whitespace text after.'
+                )
+
+        if not end.endswith('>'):
+            raise template.TemplateSyntaxError(
+                'A reactive generic block {% # %}...{% / %} must be ended with \'>\' (and possibly whitespaces after).'
+                )
+        
+        end = end[:-1]
+        end_parts = list(smart_split(end, '<', skip_blank=False))
+        if len(end_parts) < 2:
+            raise template.TemplateSyntaxError(
+                'Missing \'<\' while parsimg a reactive generic block {% # %}...{% / %}'
+                )
+        
+        end_bits = list(smart_split(end_parts[-1], ' '))
+        if not end_bits:
+            raise template.TemplateSyntaxError(
+                'The first tag <...> is empty inside a reactive generic block {% # %}...{% / %}'
+                )
+        
+        # TODO: Verify that they are ending well (i.e. in the form of </tag>, and with the same html tag name!!)
+        #          and also start well (with no / in the start tag) -> second line was done
+
+        end_location = len(end) - len(end_parts[-1]) - 1
+        nodelist[-1].s = nodelist[-1].s[:end_location]
+
+        # elif nodelist and remove_whitespaces_on_boundaries(end_token.contents) != ('/' + html_tag):
+        # raise template.TemplateSyntaxError(f'The closing tag should be in the form of <{"/" + html_tag}>')
+    else:
+        if not self_enclosed:
+            raise template.TemplateSyntaxError(
+                'A slash (\'/\') in start tag <..> was not found while parsimg a reactive generic block {% # %}...{% / %}, ' + \
+                'which indicate that the tag is not self enclosing, but not found more HTML code or or non-whitespace text after.'
+                )
+
+        nodelist = None
+
+    return parse_reacttag_internal(html_tag, bits_after, nodelist)
 
 class ReactForNode(ReactNode):
     tag_name = 'for'

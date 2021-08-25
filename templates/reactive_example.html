@@ -280,13 +280,18 @@ You can also have a keyed for loop:
 Or even a more advanced one:
 (make sure that first names are unique, or else you'll have an error)
 
+{%#%}<div></div>{%/%}
+
+{%#%}
 <form>
 New person:
-{% #/tag input/ type="text" id="first_name" %}{% comment%}An example for self enclosed tag{% endcomment %}
-<input type="text" id="last_name" />
+{% comment%}An example for self enclosed tags{% endcomment %}
+{% #/tag input/ type="text" id="first_name" %}
+{% #/tag input type="text" id="last_name" / %}
 <input type="number" id="age" />
 <input type="button" value="Insert to the End" onclick="insert_person_to_the_end();" />
 </form>
+{%/%}
 
 <table>
 <tr>

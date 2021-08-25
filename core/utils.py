@@ -114,7 +114,8 @@ def smart_split(expression: str, seperator: str,
         
         loc += 1
 
-    yield expression[i:]
+    if i != loc or (not skip_blank):
+        yield expression[i:]
 
 def split_assignment(assignment: str) -> Tuple[str, str]:
     iter = smart_split(assignment, '=', skip_blank=False)
@@ -159,18 +160,25 @@ def manual_non_empty_sum(iter):
 
 whitespaces = [' ', '\t', '\n']
 
-def remove_whitespaces_on_boundaries(s: str) -> str:
-    for i in range(len(s)):
-        if s[i] not in whitespaces:
-            break
-    
-    if i == len(s) - 1 and s[i] in whitespaces:
-        return ''
-    # otherwise
+def remove_whitespaces_on_boundaries(s: str, left: bool = True, right: bool = True) -> str:
+    i = 0
+    j = len(s) - 1
 
-    for j in range(len(s) - 1, i - 1, -1):
-        if s[j] not in whitespaces:
-            break
+    if left:
+        for i in range(len(s)):
+            if s[i] not in whitespaces:
+                break
+        
+        if i == len(s) - 1 and s[i] in whitespaces:
+            return ''
+
+    if right:
+        for j in range(len(s) - 1, i - 1, -1):
+            if s[j] not in whitespaces:
+                break
+        
+        if j == 0 and s[0] in whitespaces:
+            return ''
     
     return s[i:j+1]
 
