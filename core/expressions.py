@@ -337,7 +337,7 @@ class DictExpression(Expression):
             if seperator == -1:
                 raise template.TemplateSyntaxError("Can't find key-value seperator ':'")
 
-            key = part[:seperator]
+            key = remove_whitespaces_on_boundaries(part[:seperator])
             val_str = part[seperator+1:]
 
             if key_expression := StringExpression.try_parse(key):
