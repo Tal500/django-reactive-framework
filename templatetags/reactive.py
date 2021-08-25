@@ -395,7 +395,8 @@ class ReactForNode(ReactNode):
                 js_rerender_expression = None
             
             return js_rerender_expression, \
-                (hook for hook in hooks if (hook not in vars)) if self.key_expression is None else []
+                (hook for hook in hooks if (hook not in vars)) if self.key_expression is None else [control_var]
+                # We're using control_var hooks for calling to rerendering if the loop was empty before.
 
         def render_script(self, subtree: Optional[List]) -> ResorceScript:
             iter_var = ReactVar(self.var_name, None)
@@ -475,11 +476,19 @@ class ReactForNode(ReactNode):
                 f'const __reactive_old_iters = {control_var.js_get()}.iters;\n' + \
                 f'{control_var.js_get()}.iters = [];\n' + \
                 'var current_old_element = null;\n' + \
-                f'//if (__reactive_old_iters.length != 0) {{// TODO: Handle if it was empty already\n' + \
+                'var __reactive_need_work = true;\n' + \
+                'if (__reactive_old_iters.length === 0) {\n' + \
+                    'if (react_iter.length !== 0) {\n' + \
+                        f'{control_var.js_get()}.last_length = 0;// TODO: Remove this non-useful last_length\n' + \
+                        control_var.js_notify() + '\n' + \
+                        '__reactive_need_work = false;\n' + \
+                    '}\n' + \
+                '} else {\n' + \
                     self.get_def(control_var, iter_var, iteration_expression='__reactive_old_iters[0]') + '\n' + \
                     f'const {iter_id_var.js()} = {iter_id_var.reactive_val_js(self)};\n' + \
                     f'current_old_element = document.getElementById({tag_id_js});\n' + \
-                '//}\n' + \
+                '}\n' + \
+                'if (__reactive_need_work) {\n' + \
                 'for (var i = 0; i < react_iter.length; ++i) {\n' + \
                     f'const {iter_var.js()} = {iter_var.reactive_val_js(self, "react_iter[i]")};\n' + \
                     f'const {iter_id_var.js()} = {iter_id_var.reactive_val_js(self)};\n' + \
@@ -524,6 +533,7 @@ class ReactForNode(ReactNode):
                         'element.parentNode.removeChild(element);\n' + \
                         f'delete {control_var.js_get()}.key_table[{iter_id_var.js_get()}];\n' + \
                     '}\n' + \
+                '}\n' + \
                 '}\n'
 
             script.initial_pre_calc = '( () => {\n' + \
@@ -553,7 +563,7 @@ class ReactForNode(ReactNode):
                 'function update_for() {\n' + \
                 update_for_code + \
                 '\n}\n' + \
-                '\n'.join((f'{control_var.js_get()}.attachment_{hook.get_name()} = {hook.js_attach("update_for", True)};' \
+                '\n'.join((f'{control_var.js_get()}.attachment_{hook.get_name()} = {hook.js_attach("update_for", False)};' \
                     for hook in iter_hooks)) + \
                 '\n'
                 if self.key_expression else '') + \
