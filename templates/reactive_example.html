@@ -6,15 +6,24 @@
 
 {% block content %}
 
-<p id="js_status" style="color: green;">
-No JavaScript errors so far!
+<p id="js_status" style="color: yellow;">
+Loading page, and no JavaScript errors so far...
 </p>
 
 <script type="text/javascript">
-    window.onerror=function(msg) {
-        const element = document.getElementById('js_status');
-        element.innerHTML = 'JavaScript errors occured!';
-        element.style.color = 'red';
+    const js_status_element = document.getElementById('js_status');
+    var found_error = false;
+
+    window.onload = function(msg) {
+        if (!found_error) {
+            js_status_element.innerHTML = 'Page loaded with no JavaScript errors!';
+            js_status_element.style.color = 'green';
+        }
+    }
+    window.onerror = function(msg) {
+        found_error = true;
+        js_status_element.innerHTML = 'JavaScript errors occured!';
+        js_status_element.style.color = 'red';
     }
 </script>
 
