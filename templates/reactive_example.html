@@ -243,9 +243,11 @@ setTimeout(
 
 {% #/def rand_color 'rgb(0,0,255)' %}
 
-{% #tag div style="padding-top: 5px; color:"+rand_color+";" %}
+{% # %}
+<div style="padding-top: 5px; color:"+rand_color+";">
 This is text change its color randomally using reactive tag attribute.
-{% /tag %}
+</div>
+{% / %}
 
 <script>
 function getRandomInt(min, max) {
