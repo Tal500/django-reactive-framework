@@ -429,7 +429,7 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
         end_parts = list(smart_split(end, '<', skip_blank=False))
         if len(end_parts) < 2:
             raise template.TemplateSyntaxError(
-                'Missing \'<\' while parsimg a reactive generic block {% # %}...{% / %}'
+                'Missing \'<\' on the closing tag while parsimg a reactive generic block {% # %}...{% / %}'
                 )
         
         end_bits = list(smart_split(end_parts[-1], ' '))
@@ -438,14 +438,35 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
                 'The first tag <...> is empty inside a reactive generic block {% # %}...{% / %}'
                 )
         
-        # TODO: Verify that they are ending well (i.e. in the form of </tag>, and with the same html tag name!!)
-        #          and also start well (with no / in the start tag) -> second line was done
+        if not end_bits[0].startswith('/'):
+            raise template.TemplateSyntaxError(
+                'Missing \'/\' on the start of the closing tag, while parsimg a reactive generic block {% # %}...{% / %}'
+                )
+        
+        end_seperated_by_slash = list(smart_split(end_parts[-1], '/', skip_blank=False))
+        if len(end_seperated_by_slash) > 2:
+            raise template.TemplateSyntaxError(
+                'Found more than one slash (\'/\') in closing tag </..> while parsimg a reactive generic block {% # %}...{% / %}'
+                )
+        
+        end_bits[0] = end_bits[0][1:]# Remove the slash '/'
+        if not end_bits[0]:# If now the part string is empty after removing the slash '/'
+            end_bits = end_bits[1:]
+        
+        if len(end_bits) != 1:
+            raise template.TemplateSyntaxError(
+                'There should be exactly one word after the slash (\'/\') in closing tag </..> ' + \
+                    '(found while parsimg a reactive generic block {% # %}...{% / %})'
+                )
+        
+        if end_bits[0] != html_tag:
+            raise template.TemplateSyntaxError(
+                f'There name of the closing tag ({end_bits[0]}) must be identical to the name of the opening tag ({html_tag}) ' + \
+                    '(found while parsimg a reactive generic block {% # %}...{% / %})'
+                )
 
         end_location = len(end) - len(end_parts[-1]) - 1
         nodelist[-1].s = nodelist[-1].s[:end_location]
-
-        # elif nodelist and remove_whitespaces_on_boundaries(end_token.contents) != ('/' + html_tag):
-        # raise template.TemplateSyntaxError(f'The closing tag should be in the form of <{"/" + html_tag}>')
     else:
         if not self_enclosed:
             raise template.TemplateSyntaxError(
