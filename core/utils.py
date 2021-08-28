@@ -117,7 +117,7 @@ def smart_split(expression: str, seperators: Container[str],
     if i != loc or (not skip_blank):
         yield expression[i:]
 
-def split_assignment(assignment: str) -> Tuple[str, str]:
+def split_assignment(assignment: str) -> Optional[Tuple[str, str]]:
     iter = smart_split(assignment, ['='], skip_blank=False)
 
     try:
@@ -130,12 +130,61 @@ def split_assignment(assignment: str) -> Tuple[str, str]:
         except StopIteration:
             pass
     except StopIteration:
-        raise template.TemplateSyntaxError('Error in parsing assignment, it should be in the form: lhs = rhs')
+        return None
     
     return lhs, rhs
 
-def split_kwargs(assignments: Iterable[str]) -> Iterable[Tuple[str, str]]:
-    return (split_assignment(assignment) for assignment in assignments)
+def kwargs_stream(aurguments: Iterable[str]) -> Iterator[Optional[str]]:
+    for aurgument in aurguments:
+        if result := split_assignment(aurgument):
+            lhs, rhs = result
+            if lhs:
+                yield lhs
+            
+            yield None
+
+            if rhs:
+                yield rhs
+        else:
+            yield aurgument
+
+def kwargs_stream_reduced(aurguments: Iterable[str]) -> Iterator[Optional[str]]:
+    return (remove_whitespaces_on_boundaries(part) if part is not None else None
+        for part in kwargs_stream(aurguments))
+
+
+def split_kwargs(aurguments: Iterable[str]) -> Tuple[Iterable[Tuple[str, str]], Iterable[str]]:
+    binary: List[Tuple[str, str]] = []
+    unary: List[str] = []
+
+    kept_lhs: Optional[str] = None
+    saw_assignment_op: bool = False
+
+    for part in kwargs_stream_reduced(aurguments):
+        if part is None:
+            if saw_assignment_op:
+                raise template.TemplateSyntaxError('Founded double assignment (\'= =\')')
+            elif kept_lhs is None:
+                raise template.TemplateSyntaxError('Founded assignment, but nothing is available from lhs for it!')
+            else:
+                saw_assignment_op = True
+        else:
+            if kept_lhs is None:
+                kept_lhs = part
+            elif saw_assignment_op:
+                binary.append((kept_lhs, part))
+                kept_lhs = None
+                saw_assignment_op = False
+            else:
+                unary.append(kept_lhs)
+                kept_lhs = part
+    
+    if saw_assignment_op:
+        raise template.TemplateSyntaxError('Founded assignment, but nothing is available from rhs for it!')
+    elif kept_lhs is not None:
+        unary.append(kept_lhs)
+
+    return binary, unary
 
 def manual_non_empty_sum(iter):
     is_first: bool = True

@@ -1,4 +1,4 @@
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import itertools
 from itertools import chain
@@ -260,11 +260,12 @@ class ReactTagNode(ReactNode):
             return script
     
     def __init__(self, nodelist: Optional[template.NodeList], self_enclosed: bool, html_tag: str,
-        html_attributes: Dict[str, Expression]):
+        html_attributes: Dict[str, Expression], html_unary_attributes: Set[str]):
         
         self.self_enclosed: bool = self_enclosed
         self.html_tag: str = html_tag
         self.html_attributes = html_attributes
+        # TODO: Use html_unary_attributes somehow. Maybe import them to self.html_attributes with constant true value?
 
         super().__init__(nodelist=nodelist)
     
@@ -276,12 +277,13 @@ class ReactTagNode(ReactNode):
         return ReactTagNode.RenderData(parent_context, id, self.self_enclosed, self.html_tag, parsed_html_attributes)
 
 def parse_reacttag_internal(html_tag: str, bits_after: List[str], nodelist: template.NodeList):
-    html_attributes_unparsed = split_kwargs(bits_after)
+    html_attributes_unparsed, html_unary_attributes_ = split_kwargs(bits_after)
     html_attributes = { attribute: parse_expression(val_unparsed) for attribute, val_unparsed in html_attributes_unparsed }
+    html_unary_attributes = set(html_unary_attributes_)
     
     self_enclosed = (nodelist is None)
 
-    return ReactTagNode(nodelist, self_enclosed, html_tag, html_attributes)
+    return ReactTagNode(nodelist, self_enclosed, html_tag, html_attributes, html_unary_attributes)
 
 @register.tag('#' + ReactTagNode.tag_name)
 @register.tag('#/' + ReactTagNode.tag_name)
