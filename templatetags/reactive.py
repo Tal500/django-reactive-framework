@@ -12,7 +12,7 @@ from django.templatetags.static import static
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
 from ..core.expressions import EscapingContainerExpression, Expression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, VariableExpression, parse_expression
 
-from ..core.utils import reduce_nodelist, remove_whitespaces_on_boundaries, split_kwargs, str_repr_s, smart_split, common_delimiters, dq
+from ..core.utils import reduce_nodelist, remove_whitespaces_on_boundaries, split_kwargs, str_repr_s, smart_split, common_delimiters, dq, whitespaces
 
 register = template.Library()
 
@@ -108,7 +108,7 @@ class ReactDefNode(ReactNode):
 def do_reactdef(parser: template.base.Parser, token: template.base.Token):
     # TODO: Make the difference between bounded and unbounded expressions(i.e. if reactivity change them).
     try:
-        tag_name, var_name, var_val_expression = tuple(smart_split(token.contents, ' ', common_delimiters))
+        tag_name, var_name, var_val_expression = tuple(smart_split(token.contents, whitespaces, common_delimiters))
     except ValueError:
         raise template.TemplateSyntaxError(
             "%r tag requires exactly two arguments" % token.contents.split()[0]
@@ -287,7 +287,7 @@ def parse_reacttag_internal(html_tag: str, bits_after: List[str], nodelist: temp
 @register.tag('#/' + ReactTagNode.tag_name)
 def do_reacttag(parser: template.base.Parser, token: template.base.Token):
 
-    bits = list(smart_split(token.contents, ' ', common_delimiters))
+    bits = list(smart_split(token.contents, whitespaces, common_delimiters))
 
     tag = token.contents.split()[0]
 
@@ -322,7 +322,7 @@ def do_reacttag(parser: template.base.Parser, token: template.base.Token):
 
 @register.tag('#')
 def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
-    bits = list(smart_split(token.contents, ' ', common_delimiters))
+    bits = list(smart_split(token.contents, whitespaces, common_delimiters))
 
     if len(bits) != 1:
         raise template.TemplateSyntaxError(
@@ -359,13 +359,13 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
             )
     
     start = start[1:]
-    start_parts = list(smart_split(start, '>', skip_blank=False))
+    start_parts = list(smart_split(start, ['>'], skip_blank=False))
     if len(start_parts) < 2:
         raise template.TemplateSyntaxError(
             'Missing \'>\' while parsimg a reactive generic block {% # %}...{% / %}'
             )
 
-    start_bits = list(smart_split(start_parts[0], ' '))
+    start_bits = list(smart_split(start_parts[0], whitespaces))
     if not start_bits:
         raise template.TemplateSyntaxError(
             'The first tag <...> is empty inside a reactive generic block {% # %}...{% / %}'
@@ -379,7 +379,7 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
         html_tag = html_tag[:-1]
         self_enclosed = True
     
-    start_seperated_by_slash = list(smart_split(start_parts[0], '/', skip_blank=False))
+    start_seperated_by_slash = list(smart_split(start_parts[0], ['/'], skip_blank=False))
     if len(start_seperated_by_slash) > 2:
         raise template.TemplateSyntaxError(
             'Found more than one slash (\'/\') in start tag <..> while parsimg a reactive generic block {% # %}...{% / %}'
@@ -426,13 +426,13 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
                 )
         
         end = end[:-1]
-        end_parts = list(smart_split(end, '<', skip_blank=False))
+        end_parts = list(smart_split(end, ['<'], skip_blank=False))
         if len(end_parts) < 2:
             raise template.TemplateSyntaxError(
                 'Missing \'<\' on the closing tag while parsimg a reactive generic block {% # %}...{% / %}'
                 )
         
-        end_bits = list(smart_split(end_parts[-1], ' '))
+        end_bits = list(smart_split(end_parts[-1], whitespaces))
         if not end_bits:
             raise template.TemplateSyntaxError(
                 'The first tag <...> is empty inside a reactive generic block {% # %}...{% / %}'
@@ -443,7 +443,7 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
                 'Missing \'/\' on the start of the closing tag, while parsimg a reactive generic block {% # %}...{% / %}'
                 )
         
-        end_seperated_by_slash = list(smart_split(end_parts[-1], '/', skip_blank=False))
+        end_seperated_by_slash = list(smart_split(end_parts[-1], ['/'], skip_blank=False))
         if len(end_seperated_by_slash) > 2:
             raise template.TemplateSyntaxError(
                 'Found more than one slash (\'/\') in closing tag </..> while parsimg a reactive generic block {% # %}...{% / %}'
@@ -793,7 +793,7 @@ class ReactForNode(ReactNode):
 
 @register.tag('#' + ReactForNode.tag_name)
 def do_reactfor(parser: template.base.Parser, token: template.base.Token):
-    bits = list(smart_split(token.contents, ' ', common_delimiters))
+    bits = list(smart_split(token.contents, whitespaces, common_delimiters))
 
     if len(bits) != 4 and len(bits) != 6:
         raise template.TemplateSyntaxError(
@@ -887,7 +887,7 @@ class ReactIfNode(ReactNode):
 def do_reactif(parser: template.base.Parser, token: template.base.Token):
     # TODO: add support for else and elif in the future
 
-    bits = list(smart_split(token.contents, ' ', common_delimiters))
+    bits = list(smart_split(token.contents, whitespaces, common_delimiters))
 
     if len(bits) != 2:
         raise template.TemplateSyntaxError(
@@ -985,7 +985,7 @@ class ReactPrintNode(ReactNode):
 # TODO: Maybe instead use just the {% ... %} tag and just track it and render it from outside?
 @register.tag('#/' + ReactPrintNode.tag_name)
 def do_reactprint(parser: template.base.Parser, token: template.base.Token):
-    bits = list(smart_split(token.contents, ' ', common_delimiters))
+    bits = list(smart_split(token.contents, whitespaces, common_delimiters))
 
     if len(bits) != 2:
         raise template.TemplateSyntaxError(
@@ -1030,7 +1030,7 @@ class ReactGetNode(ReactNode):
 def do_reactget(parser: template.base.Parser, token: template.base.Token):
     """Get current present value, in js expression"""
 
-    bits = list(smart_split(token.contents, ' ', common_delimiters))
+    bits = list(smart_split(token.contents, whitespaces, common_delimiters))
 
     if len(bits) != 2:
         raise template.TemplateSyntaxError(
@@ -1072,7 +1072,7 @@ def do_reactset(parser: template.base.Parser, token: template.base.Token):
 
     # TODO: Make the difference between bounded and unbounded expressions. (Currently unbound)
 
-    bits = list(smart_split(token.contents, ' ', common_delimiters))
+    bits = list(smart_split(token.contents, whitespaces, common_delimiters))
 
     if len(bits) != 2:
         raise template.TemplateSyntaxError(
@@ -1122,7 +1122,7 @@ def do_reactnotify(parser: template.base.Parser, token: template.base.Token):
 
     # TODO: Make the difference between bounded and unbounded expressions. (Currently unbound)
 
-    bits = list(smart_split(token.contents, ' ', common_delimiters))
+    bits = list(smart_split(token.contents, whitespaces, common_delimiters))
 
     if len(bits) != 2:
         raise template.TemplateSyntaxError(
@@ -1170,7 +1170,7 @@ class ReactRedoNode(ReactNode):
 
 @register.tag('#' + ReactRedoNode.tag_name)
 def do_reactredo(parser: template.base.Parser, token: template.base.Token):
-    bits = list(smart_split(token.contents, ' ', common_delimiters))
+    bits = list(smart_split(token.contents, whitespaces, common_delimiters))
 
     if len(bits) != 1:
         raise template.TemplateSyntaxError(

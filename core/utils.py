@@ -1,4 +1,4 @@
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Any, Container, Dict, Iterable, Iterator, List, Optional, Tuple
 
 from django import template
 
@@ -75,7 +75,7 @@ def match_first(char: str, tuples: List[Tuple]):
 
     return None
 
-def smart_split(expression: str, seperator: str,
+def smart_split(expression: str, seperators: Container[str],
     delimiters: List[Tuple[str, str, Any]] = common_delimiters, skip_blank: bool = True) -> Iterator[str]:
     i = 0
     loc = 0
@@ -100,7 +100,7 @@ def smart_split(expression: str, seperator: str,
         char = expression[loc]
 
         if len(end_delimiters_stack) == 0:
-            if char == seperator and len(end_delimiters_stack) == 0:
+            if char in seperators and len(end_delimiters_stack) == 0:
                 if i != loc or (not skip_blank):
                     yield expression[i:loc]
                 i = loc + 1
@@ -118,7 +118,7 @@ def smart_split(expression: str, seperator: str,
         yield expression[i:]
 
 def split_assignment(assignment: str) -> Tuple[str, str]:
-    iter = smart_split(assignment, '=', skip_blank=False)
+    iter = smart_split(assignment, ['='], skip_blank=False)
 
     try:
         lhs = next(iter)
