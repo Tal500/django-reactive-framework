@@ -251,14 +251,31 @@ setTimeout(
 </script>
 
 {% #/def rand_color 'rgb(0,0,255)' %}
+{% #/def changing_color True %}
+
+<form>
+<input type="button" value="Toggle color changing" onclick="toggle_color_changing();" />
+</form>
 
 {% # %}
-<div style="padding-top: 5px; color:"+rand_color+";">
+<div style="padding-top: 5px; color:"+(changing_color?rand_color:'black')+";">
+{% #if changing_color %}
 This is text change its color randomally using reactive tag attribute.
+{% /if %}
+{% comment %} Use invertion operator ('!') after it's supported instead. {% endcomment %}
+{% #if changing_color?False:True %}
+This text stopped changing color!
+{% /if %}
 </div>
 {% / %}
 
 <script>
+function toggle_color_changing() {
+    {% #set changing_color %}
+    !{% #/get changing_color %}
+    {% /set %}
+}
+
 function getRandomInt(min, max) {
   min = Math.ceil(min);
   max = Math.floor(max);

@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from itertools import chain
 from typing import Any, Dict, List, Optional, Tuple
 
 from django import template
@@ -521,6 +522,102 @@ class SettablePropertyExpression(PropertyExpression, SettableExpression):
         settable_expression: SettableExpression = self.root_expression
         return settable_expression.js_notify(react_context)
 
+class TernaryOperatorExpression(Expression):
+    def __init__(self, condition: Expression, expression_if_true: Expression, expression_if_false: Expression):
+        self.condition = condition
+        self.expression_if_true = expression_if_true
+        self.expression_if_false = expression_if_false
+    
+    def __str__(self) -> str:
+        return f'({self.condition}?{self.expression_if_true}:{self.expression_if_false})'
+    
+    def eval_condition_initial(self, react_context: Optional[ReactContext]) -> bool:
+        condition_val = self.condition.eval_initial(react_context)
+
+        if not isinstance(condition_val, bool):
+            raise template.TemplateSyntaxError('The initial value of a condition is not boolean!')
+        # otherwise
+
+        return condition_val
+    
+    @property
+    def constant(self) -> bool:
+        if not self.condition.constant:
+            return False
+        # otherwise
+
+        if self.eval_condition_initial(None):
+            return self.expression_if_true.constant
+        else:
+            return self.expression_if_false.constant
+    
+    def reduce(self, template_context: template.Context):
+        return TernaryOperatorExpression(self.condition, self.expression_if_true, self.expression_if_false)
+    
+    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+        if self.eval_condition_initial(react_context):
+            return self.expression_if_true.eval_initial(react_context)
+        else:
+            return self.expression_if_false.eval_initial(react_context)
+
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+        if self.condition.constant:
+            if self.eval_condition_initial(None):
+                return self.expression_if_true.eval_js_and_hooks(react_context, delimiter)
+            else:
+                return self.expression_if_false.eval_js_and_hooks(react_context, delimiter)
+        # otherwise
+
+        condition_js, condition_hooks = self.condition.eval_js_and_hooks(react_context, delimiter)
+
+        true_js, true_hooks = self.expression_if_true.eval_js_and_hooks(react_context, delimiter)
+
+        false_js, false_hooks = self.expression_if_false.eval_js_and_hooks(react_context, delimiter)
+
+        all_hooks = list(chain(condition_hooks, true_hooks, false_hooks))
+        
+        return f'({condition_js}?{true_js}:{false_js})', all_hooks
+    
+    @staticmethod
+    def try_parse(expression: str) -> Optional['TernaryOperatorExpression']:
+        parts1 = list(smart_split(expression, ('?',)))
+        if len(parts1) < 2:
+            return None
+        elif len(parts1) > 2:
+            raise template.TemplateSyntaxError(
+                f'Error when parsing ternary expression: too many \'?\'. Expression: ({expression})')
+        # otherwise (len(parts1) == 2)
+
+        condition_str, rest_str = parts1
+
+        parts2 = list(smart_split(rest_str, (':',)))
+        if len(parts2) < 2:
+            raise template.TemplateSyntaxError(
+                f'Error when parsing ternary expression: found \'?\' but no \':\'. Expression: ({expression})')
+        elif len(parts2) > 2:
+            raise template.TemplateSyntaxError(
+                f'Error when parsing ternary expression: too many \':\' after \'?\'. Expression: ({expression})')
+        # otherwise (len(parts2) == 2)
+        
+        true_str, false_str = parts2
+
+        condition = parse_expression(condition_str)
+        if condition is None:
+            raise template.TemplateSyntaxError(
+                f'Error when parsing ternary expression: fail to parse the condition expression: ({condition_str})')
+
+        expression_if_true = parse_expression(true_str)
+        if expression_if_true is None:
+            raise template.TemplateSyntaxError(
+                f'Error when parsing ternary expression: fail to parse the if true expression: ({true_str})')
+
+        expression_if_false = parse_expression(false_str)
+        if expression_if_false is None:
+            raise template.TemplateSyntaxError(
+                f'Error when parsing ternary expression: fail to parse the if false expression: ({false_str})')
+
+        return TernaryOperatorExpression(condition, expression_if_true, expression_if_false)
+
 # This expression type is used only internally, and the user can't create it manually.
 class NewReactDataExpression(Expression):
     def __init__(self, data: ReactData):
@@ -578,6 +675,8 @@ def parse_expression(expression: str):
     
     if expression[0] == '(' and expression[-1] == ')':
         return parse_expression(expression[1:-1])
+    elif exp := TernaryOperatorExpression.try_parse(expression):
+        return exp
     elif exp := StringExpression.try_parse(expression):
         return exp
     elif exp := BoolExpression.try_parse(expression):
