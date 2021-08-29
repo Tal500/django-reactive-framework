@@ -10,7 +10,7 @@ from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
-from ..core.expressions import EscapingContainerExpression, Expression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, VariableExpression, parse_expression
+from ..core.expressions import EscapingContainerExpression, Expression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, TernaryOperatorExpression, VariableExpression, parse_expression
 
 from ..core.utils import reduce_nodelist, remove_whitespaces_on_boundaries, split_kwargs, str_repr_s, smart_split, common_delimiters, dq, whitespaces
 
@@ -164,18 +164,20 @@ class ReactTagNode(ReactNode):
                 expressions: Tuple[Optional[Expression], Optional[Expression]]) -> Iterable[Expression]:
 
                 cond_expression, val_expression = expressions
-                if cond_expression is not None:
-                    # TODO: Support it, but need to implement also ConditionalExpression before!
-                    raise Exception('Reactive doesn\'t support conditional attribute yet!')
-                
+
                 if val_expression is None:
-                    return (StringExpression(f' {key}="{key}"'), )
+                    set_attr_part = (StringExpression(f' {key}="{key}"'), )
                 else:
-                    return (
+                    set_attr_part = (
                         StringExpression(f' {key}=\"'),
                         EscapingContainerExpression(val_expression, dq),
                         StringExpression('\"')
                     )
+                
+                if cond_expression is None:
+                    return set_attr_part
+                else:
+                    return (TernaryOperatorExpression(cond_expression, SumExpression(set_attr_part), StringExpression('')), )
 
             exp_iter = (attribute_expression_part(key, expressions) for key, expressions in computed_attributes.items())
 
@@ -348,12 +350,25 @@ def parse_reacttag_internal(html_tag: str, bits_after: List[str], nodelist: temp
     def parse_attribute(attribute_unparsed: Tuple[str, Optional[str]]) -> \
         Tuple[str, Tuple[Optional[Expression], Optional[Expression]]]:
 
-        key, val = attribute_unparsed
-        if key=='id' and val is None:
-            raise template.TemplateSyntaxError('\'id\' attribute cannot appear with no assignment.')
-        # TODO: Verify also that id attribute is not conditional (after supporting conditional attributes)
+        key_and_condition, val = attribute_unparsed
 
-        condition_expression = None# TODO: Support and parse it
+        key_parts = list(smart_split(key_and_condition, ['?']))
+        if len(key_parts) > 2:
+            raise template.TemplateSyntaxError(f'Too many \'?\' in the attribute key: ({key})')
+        elif len(key_parts) == 2:
+            key, condition_str = key_parts
+        else:
+            key = key_and_condition
+            condition_str = None
+
+        if key=='id':
+            if condition_str is not None:
+                raise template.TemplateSyntaxError('\'id\' attribute cannot be conditional!')
+            if val is None:
+                raise template.TemplateSyntaxError('\'id\' attribute cannot appear with no assignment.')
+        # otherwise
+
+        condition_expression = parse_expression(condition_str) if condition_str is not None else None
 
         val_expression = parse_expression(val) if val is not None else None
 

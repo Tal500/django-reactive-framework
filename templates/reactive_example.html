@@ -304,6 +304,8 @@ You can also have a keyed for loop:
 
 {% #/def interactive_people_array [{first:'John',last:'Smith',age: 40}] %}
 
+{% #/def disable_insertion False %}
+
 {% #tag div style="padding-top: 5px;" %}
 Or even a more advanced one:
 (make sure that first names are unique, or else you'll have an error)
@@ -318,7 +320,9 @@ New person:
 {% #/tag input type ="text" id= "last_name" / %}
 {%#%}<input type="number"
 id="age" required/>{%/%}
-<input type="submit" value="Insert to the End" />
+{%#%}<input type="submit" value="Insert to the End" disabled?disable_insertion />{%/%}
+<input type="checkbox" id="allow_insertion_checkbox" checked onchange="change_allow_insertion();" />
+<label for="allow_insertion_checkbox">Allow Insertion</label>
 </form>
 {%/%}
 
@@ -344,8 +348,10 @@ id="age" required/>{%/%}
 <form>
 <input type="button" value="Increase Age" onclick="increase_age_by_first_name('{% #/print person.first %}');" />
 <input type="button" value="Delete" onclick="remove_by_first_name('{% #/print person.first %}');" />
-<input type="button" value="Add Above" onclick="add_above_by_first_name('{% #/print person.first %}');" />
-<input type="button" value="Add Below" onclick="add_below_by_first_name('{% #/print person.first %}');" />
+{%#%}<input type="button" value="Add Above" disabled?disable_insertion
+onclick="add_above_by_first_name('"+person.first+"');" />{%/%}
+{%#%}<input type="button" value="Add Below" disabled?disable_insertion="disabled"
+ onclick="add_below_by_first_name('"+person.first+"');" />{%/%}
 </form>
 </td>
 {% /tag %}
@@ -354,6 +360,12 @@ id="age" required/>{%/%}
 {% /tag %}
 
 <script>
+function change_allow_insertion() {
+    {% #set disable_insertion %}
+    !{% #/get disable_insertion %}
+    {% /set %}
+}
+
 function get_current_person() {
     return {
         first: document.getElementById('first_name').value,
@@ -373,6 +385,10 @@ function verify_form_validity() {
 }
 
 function insert_person_to_the_end() {
+    if ({% #/get disable_insertion %})
+        return;
+    // otherwise
+
     if (!verify_form_validity())
         return;
     // otherwise
