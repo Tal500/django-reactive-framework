@@ -121,21 +121,21 @@ class ReactTagNode(ReactNode):
 
     class RenderData(ReactRerenderableContext):
         def __init__(self, parent: ReactContext, id: str, self_enclosed: bool, html_tag: str,
-            html_attributes: Dict[str, Expression]):
+            html_attributes: Dict[str, Tuple[Optional[Expression], Optional[Expression]]]):
 
             super().__init__(id=id, parent=parent, fully_reactive=True)
             self.self_enclosed: bool = self_enclosed
             self.html_tag: str = html_tag
             self.control_var_name: str = f'__react_control_{id}'
-            self.html_attributes: Dict[str, Expression] = html_attributes
+            self.html_attributes: Dict[str, Tuple[Optional[Expression], Optional[Expression]]] = html_attributes
     
         def var_js(self, var):
             return f'{var.name}_tag{self.id}'
         
-        def compute_attributes(self) -> Dict[str, Expression]:
+        def compute_attributes(self) -> Dict[str, Tuple[Optional[Expression], Optional[Expression]]]:
             computed_attributes = dict(self.html_attributes)
 
-            id_attribute: Optional[Expression] = computed_attributes.get('id')
+            id_attribute: Optional[Tuple[Optional[Expression], Optional[Expression]]] = computed_attributes.get('id')
             if id_attribute is None:
                 path_id_expressions: List[Expression] = [self.id_prefix_expression()]
                 current: ReactContext = self.parent
@@ -149,15 +149,35 @@ class ReactTagNode(ReactNode):
                 path_id_expressions.reverse()
 
                 id_attribute = SumExpression(path_id_expressions)
-                computed_attributes['id'] = id_attribute
+                computed_attributes['id'] = (None, id_attribute)
+            elif id_attribute[0] is not None:
+                raise Exception('Internal error in reactive: didn\'t catch on parsing that id attribute is conditional!')
+            elif id_attribute[1] is None:
+                raise Exception('Internal error in reactive: didn\'t catch on parsing that id attribute is empty!')
             
             return computed_attributes
         
         def compute_attribute_expression(self) -> Expression:
             computed_attributes = self.compute_attributes()
 
-            exp_iter = ( (StringExpression(f' {key}=\"'), EscapingContainerExpression(expression, dq), StringExpression('\"')) \
-                for key, expression in computed_attributes.items() )
+            def attribute_expression_part(key: str,
+                expressions: Tuple[Optional[Expression], Optional[Expression]]) -> Iterable[Expression]:
+
+                cond_expression, val_expression = expressions
+                if cond_expression is not None:
+                    # TODO: Support it, but need to implement also ConditionalExpression before!
+                    raise Exception('Reactive doesn\'t support conditional attribute yet!')
+                
+                if val_expression is None:
+                    return (StringExpression(f' {key}="{key}"'), )
+                else:
+                    return (
+                        StringExpression(f' {key}=\"'),
+                        EscapingContainerExpression(val_expression, dq),
+                        StringExpression('\"')
+                    )
+
+            exp_iter = (attribute_expression_part(key, expressions) for key, expressions in computed_attributes.items())
 
             return SumExpression(list(itertools.chain.from_iterable(exp_iter)))
         
@@ -201,11 +221,44 @@ class ReactTagNode(ReactNode):
             
             return js_expression, []
         
-        def set_attribute_js_expression(self, element_js: str, attribute: str, js_expression: str) -> str:
-            if attribute.startswith('data-'):
-                return f"{element_js}.setAttribute({attribute}, {js_expression});"
+        def set_attribute_js_expression(self, element_js: str, attribute: str,
+            js_cond_exp: Optional[str], js_val_exp: Optional[str]) -> str:
+
+            if (js_cond_exp is not None) or (js_val_exp is None) or attribute.startswith('data-'):
+                if js_val_exp is None:
+                    js_val_exp = f"'{attribute}'"
+                
+                if js_cond_exp is None:
+                    return f"{element_js}.setAttribute('{attribute}', {js_val_exp});"
+                else:
+                    return \
+                        f"if ({js_cond_exp}) {{\n" + \
+                            f"{element_js}.setAttribute('{attribute}', {js_val_exp});" + \
+                        "} else {\n" + \
+                            f"{element_js}.removeAttribute('{attribute}');" + \
+                        "}\n"
             else:
-                return f"{element_js}.{attribute} = {js_expression};"
+                return f"{element_js}.{attribute} = {js_val_exp};"
+        
+        def all_attributes_js_expressions_and_hooks(self,
+            computed_attributes: Dict[str, Tuple[Optional[Expression], Optional[Expression]]]):
+
+            def attribute_js_expressions_and_hooks(expressions: Tuple[Optional[Expression], Optional[Expression]]):
+                cond_expression, val_expression = expressions
+
+                cond_hooks, val_hooks = [], []
+                
+                if cond_expression is not None:
+                    cond_expression, cond_hooks = cond_expression.eval_js_and_hooks(self)
+                
+                if val_expression is not None:
+                    val_expression, val_hooks = val_expression.eval_js_and_hooks(self)
+                
+                return cond_expression, val_expression, chain(cond_hooks, val_hooks)
+
+            return {
+                key: attribute_js_expressions_and_hooks(expressions) for key, expressions in computed_attributes.items()
+            }
 
         def render_script(self, subtree: Optional[List]) -> str:
             script = self.render_script_inside(subtree)
@@ -213,10 +266,9 @@ class ReactTagNode(ReactNode):
             self.clear_render()
 
             computed_attributes = self.compute_attributes()
-            id_js_expression = computed_attributes['id'].eval_js_and_hooks(self)[0]
+            id_js_expression = computed_attributes['id'][1].eval_js_and_hooks(self)[0]
 
-            attribute_js_expressions_and_hooks = {key: expression.eval_js_and_hooks(self) \
-                for key, expression in computed_attributes.items()}
+            all_attributes_js_expressions_and_hooks = self.all_attributes_js_expressions_and_hooks(computed_attributes)
 
             js_rerender_expression, hooks_inside = self.render_js_and_hooks_inside(subtree)
 
@@ -226,8 +278,11 @@ class ReactTagNode(ReactNode):
 
             first_expression = SettablePropertyExpression(VariableExpression(self.control_var_name), ['first'])
 
-            def change_attribute(id_js_expression: str, attribute: str, js_expression: str):
-                return f"() => {{ {self.set_attribute_js_expression(f'document.getElementById({id_js_expression})', attribute, js_expression)} }}"
+            def change_attribute(id_js_expression: str, attribute: str, js_cond_exp: Optional[str], js_val_exp: Optional[str]):
+                js_code = self.set_attribute_js_expression(
+                    f'document.getElementById({id_js_expression})', attribute, js_cond_exp, js_val_exp)
+                
+                return f"() => {{ {js_code} }}"
 
             # TODO: Handle the unsupported style and events setting in old IE versions?
             
@@ -244,9 +299,9 @@ class ReactTagNode(ReactNode):
                 script.initial_post_calc + '\n' + \
                 ';}\n' + \
                 '\n'.join( chain.from_iterable((f'{control_var.js_get()}.attachment_attribute_{hook.get_name()} = ' + \
-                hook.js_attach(change_attribute(id_js_expression, attribute, js_expression), True) \
+                hook.js_attach(change_attribute(id_js_expression, attribute, js_cond_exp, js_vaL_exp), True) \
                 for hook in _hooks) \
-                for attribute, (js_expression, _hooks) in attribute_js_expressions_and_hooks.items())) + \
+                for attribute, (js_cond_exp, js_vaL_exp, _hooks) in all_attributes_js_expressions_and_hooks.items())) + \
                 ';\n' + \
                 '\n'.join((f'{control_var.js_get()}.attachment_content_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
                 script.initial_post_calc + \
@@ -260,30 +315,55 @@ class ReactTagNode(ReactNode):
             return script
     
     def __init__(self, nodelist: Optional[template.NodeList], self_enclosed: bool, html_tag: str,
-        html_attributes: Dict[str, Expression], html_unary_attributes: Set[str]):
+        html_attributes: Dict[str, Tuple[Optional[Expression], Optional[Expression]]]):
         
         self.self_enclosed: bool = self_enclosed
         self.html_tag: str = html_tag
         self.html_attributes = html_attributes
-        # TODO: Use html_unary_attributes somehow. Maybe import them to self.html_attributes with constant true value?
 
         super().__init__(nodelist=nodelist)
     
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
         id = f'tag_{next_id_by_context(template_context, "__react_tag")}'
 
-        parsed_html_attributes = {key: val.reduce(template_context) for key, val in self.html_attributes.items()}
+        def reduce_attribute_expressions(expressions: Tuple[Optional[Expression], Optional[Expression]]) -> \
+            Tuple[Optional[Expression], Optional[Expression]]:
+
+            cond_expression, val_expression = expressions
+            if cond_expression:
+                cond_expression = cond_expression.reduce(template_context)
+            if val_expression:
+                val_expression = val_expression.reduce(template_context)
+
+            return cond_expression, val_expression
+
+        parsed_html_attributes = {key: reduce_attribute_expressions(expressions) for
+            key, expressions in self.html_attributes.items()}
 
         return ReactTagNode.RenderData(parent_context, id, self.self_enclosed, self.html_tag, parsed_html_attributes)
 
 def parse_reacttag_internal(html_tag: str, bits_after: List[str], nodelist: template.NodeList):
-    html_attributes_unparsed, html_unary_attributes_ = split_kwargs(bits_after)
-    html_attributes = { attribute: parse_expression(val_unparsed) for attribute, val_unparsed in html_attributes_unparsed }
-    html_unary_attributes = set(html_unary_attributes_)
+    html_attributes_unparsed = split_kwargs(bits_after)
+
+    def parse_attribute(attribute_unparsed: Tuple[str, Optional[str]]) -> \
+        Tuple[str, Tuple[Optional[Expression], Optional[Expression]]]:
+
+        key, val = attribute_unparsed
+        if key=='id' and val is None:
+            raise template.TemplateSyntaxError('\'id\' attribute cannot appear with no assignment.')
+        # TODO: Verify also that id attribute is not conditional (after supporting conditional attributes)
+
+        condition_expression = None# TODO: Support and parse it
+
+        val_expression = parse_expression(val) if val is not None else None
+
+        return key, (condition_expression, val_expression)
+
+    html_attributes = dict(parse_attribute(attribute_unparsed) for attribute_unparsed in html_attributes_unparsed)
     
     self_enclosed = (nodelist is None)
 
-    return ReactTagNode(nodelist, self_enclosed, html_tag, html_attributes, html_unary_attributes)
+    return ReactTagNode(nodelist, self_enclosed, html_tag, html_attributes)
 
 @register.tag('#' + ReactTagNode.tag_name)
 @register.tag('#/' + ReactTagNode.tag_name)
@@ -650,7 +730,7 @@ class ReactForNode(ReactNode):
 
                 computed_attributes = tag_context.compute_attributes()
 
-                tag_id_js = computed_attributes["id"].eval_js_and_hooks(self)[0]
+                tag_id_js = computed_attributes["id"][1].eval_js_and_hooks(self)[0]
             
                 self.clear_render()
 
@@ -664,6 +744,8 @@ class ReactForNode(ReactNode):
                 self.add_var(iter_id_var)
 
                 tag_inner_js = tag_context.render_js_and_hooks_inside(tag_subtree)[0]
+
+                all_attributes_js_expressions_and_hooks = tag_context.all_attributes_js_expressions_and_hooks(computed_attributes)
 
                 update_for_code = \
                 f'const react_iter = {iter_val_js};\n' + \
@@ -709,7 +791,9 @@ class ReactForNode(ReactNode):
                         script.initial_pre_calc + '\n' + \
                         f'const current_element = document.createElement(\'{tag_context.html_tag}\');\n' + \
                         '\n'.join(tag_context.set_attribute_js_expression("current_element", attribute,
-                            val.eval_js_and_hooks(self)[0]) for attribute, val in computed_attributes.items()) + '\n' + \
+                            js_cond_exp, js_vaL_exp) \
+                            for attribute, (js_cond_exp, js_vaL_exp, _hooks) \
+                            in all_attributes_js_expressions_and_hooks.items()) + '\n' + \
                         f'current_element.innerHTML = {tag_inner_js};\n' + \
                         'current_old_element.parentNode.insertBefore(current_element, current_old_element);\n' + \
                         script.initial_post_calc + '\n' \

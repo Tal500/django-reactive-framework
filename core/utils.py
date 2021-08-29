@@ -153,9 +153,8 @@ def kwargs_stream_reduced(aurguments: Iterable[str]) -> Iterator[Optional[str]]:
         for part in kwargs_stream(aurguments))
 
 
-def split_kwargs(aurguments: Iterable[str]) -> Tuple[Iterable[Tuple[str, str]], Iterable[str]]:
-    binary: List[Tuple[str, str]] = []
-    unary: List[str] = []
+def split_kwargs(aurguments: Iterable[str]) -> Iterable[Tuple[str, Optional[str]]]:
+    result: List[Tuple[str, str]] = []
 
     kept_lhs: Optional[str] = None
     saw_assignment_op: bool = False
@@ -172,19 +171,19 @@ def split_kwargs(aurguments: Iterable[str]) -> Tuple[Iterable[Tuple[str, str]], 
             if kept_lhs is None:
                 kept_lhs = part
             elif saw_assignment_op:
-                binary.append((kept_lhs, part))
+                result.append((kept_lhs, part))
                 kept_lhs = None
                 saw_assignment_op = False
             else:
-                unary.append(kept_lhs)
+                result.append((kept_lhs, None))
                 kept_lhs = part
     
     if saw_assignment_op:
         raise template.TemplateSyntaxError('Founded assignment, but nothing is available from rhs for it!')
     elif kept_lhs is not None:
-        unary.append(kept_lhs)
+        result.append((kept_lhs, None))
 
-    return binary, unary
+    return result
 
 def manual_non_empty_sum(iter):
     is_first: bool = True

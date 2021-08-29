@@ -294,14 +294,14 @@ Or even a more advanced one:
 {%#%}<div></div>{%/%}
 
 {%#%}
-<form>
+<form id="add_person_form" onsubmit="insert_person_to_the_end(); return false;">
 New person:
 {% comment%}An example for self enclosed tags{% endcomment %}
 {% #/tag input/ type = "text" id="first_name" %}
 {% #/tag input type ="text" id= "last_name" / %}
 {%#%}<input type="number"
 id="age" required/>{%/%}
-<input type="button" value="Insert to the End" onclick="insert_person_to_the_end();" />
+<input type="submit" value="Insert to the End" />
 </form>
 {%/%}
 
@@ -345,7 +345,21 @@ function get_current_person() {
     }
 }
 
+function verify_form_validity() {
+    ageElement = document.getElementById('age')
+    if (age.value === '') {
+        alert('Age is empty!')
+        return false;
+    } else {
+        return true;
+    }
+}
+
 function insert_person_to_the_end() {
+    if (!verify_form_validity())
+        return;
+    // otherwise
+
     person = get_current_person();
     {% #/get interactive_people_array %}.push(person);
     {% #/notify interactive_people_array %}
@@ -377,6 +391,10 @@ function remove_by_first_name(first_name) {
 }
 
 function add_above_by_first_name(first_name) {
+    if (!verify_form_validity())
+        return;
+    // otherwise
+
     const i = find_by_first_name(first_name);
     person = get_current_person();
 
@@ -385,6 +403,10 @@ function add_above_by_first_name(first_name) {
 }
 
 function add_below_by_first_name(first_name) {
+    if (!verify_form_validity())
+        return;
+    // otherwise
+
     const i = find_by_first_name(first_name);
     person = get_current_person();
 
