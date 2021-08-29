@@ -618,7 +618,7 @@ class ReactForNode(ReactNode):
 
                 self.clear_render()
             
-            control_data = {'last_length': len(iters), 'iters': iters}
+            control_data = {'iters': iters}
             if self.key_expression:
                 control_data['key_table'] = {}
 
@@ -653,7 +653,7 @@ class ReactForNode(ReactNode):
 
             vars = super().vars_needed_decleration()
 
-            control_data = {'last_length': 0, 'iters': []}
+            control_data = {'iters': []}
             control_var = ReactVar(self.control_var_name, value_to_expression(control_data))
             self.add_var(control_var)
 
@@ -755,7 +755,6 @@ class ReactForNode(ReactNode):
                 'var __reactive_need_work = true;\n' + \
                 'if (__reactive_old_iters.length === 0) {\n' + \
                     'if (react_iter.length !== 0) {\n' + \
-                        f'{control_var.js_get()}.last_length = 0;// TODO: Remove this non-useful last_length\n' + \
                         control_var.js_notify() + '\n' + \
                         '__reactive_need_work = false;\n' + \
                     '}\n' + \
@@ -817,8 +816,7 @@ class ReactForNode(ReactNode):
             script.initial_pre_calc = '( () => {\n' + \
                 f'// For loop initial pre calc\n' + \
                 f'const react_iter = {iter_val_js};\n' + \
-                f'const length_changed = ({control_var.js_get()}.last_length !== react_iter.length);\n' + \
-                f'{control_var.js_get()}.last_length = react_iter.length;\n' +\
+                f'const length_changed = ({control_var.js_get()}.iters.length !== react_iter.length);\n' + \
                 f'if (length_changed) {{\n' + \
                 f'{control_var.js_get()}.iters = [];\n' + \
                 '}\n' + \
