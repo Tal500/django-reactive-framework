@@ -1042,10 +1042,11 @@ class ReactPrintNode(ReactNode):
                 '{\n' + \
                     'function proc() {\n' + \
                         print_var.js_set(js_html_expression) + \
-                    '}\n' + \
-                    '\n'.join((f'{control_var.js_get()}.attachment_{hook.get_name()} = {hook.js_attach("proc", True)};' \
-                        for hook in hooks)) + \
-                '\n}\n'
+                    '\n}\n' + \
+                    '\n'.join((f'{control_var.js_get()}.attachment_{hook.get_name()} = {hook.js_attach("proc", False)};' \
+                        for hook in hooks)) + '\n' + \
+                    'proc();\n' + \
+                '}\n'
             
             script.destructor = \
                 '{\n' + \
