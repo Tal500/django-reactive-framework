@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from django import template
 
 from .base import ReactContext, ReactData, ReactValType, ReactHook, ReactVar, value_to_expression
+from .reactive_function import ReactiveFunction
 from .utils import manual_non_empty_sum, remove_whitespaces_on_boundaries, str_repr, str_repr_s, parse_string, smart_split, common_delimiters, sq
 
 class Expression:
@@ -618,6 +619,70 @@ class TernaryOperatorExpression(Expression):
 
         return TernaryOperatorExpression(condition, expression_if_true, expression_if_false)
 
+class FunctionCallExpression(Expression):
+    def __init__(self, name: str, function: ReactiveFunction, args: List[Expression]):
+        self.name = name
+        self.function = function
+        self.args = args
+
+        self.function.validate_args(args)
+    
+    def __str__(self) -> str:
+        return f'{self.name}({",".join(self.args)})'
+    
+    def reduce(self, template_context: template.Context):
+        args_reduced = [arg.reduce(template_context) for arg in self.args]
+        return FunctionCallExpression(self.name, self.function, args_reduced)
+
+    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+        return self.function.eval_initial(react_context, self.args)
+
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+        js_expression = self.function.eval_js(react_context, delimiter, self.args)
+
+        all_hooks = list(chain.from_iterable((arg.eval_js_and_hooks(react_context, delimiter)[1] for arg in self.args)))
+        
+        return js_expression, all_hooks
+    
+    @staticmethod
+    def try_parse(expression: str) -> Optional['TernaryOperatorExpression']:
+        parts = list(smart_split(expression, ('(',), skip_blank=False))
+        if len(parts) < 2:
+            return None
+        elif len(parts) > 2:
+            raise template.TemplateSyntaxError(
+                f'Error when parsing function call expression: too many \'(\' without enough closing \')\'. ' + \
+                f'Expression: ({expression})')
+        # otherwise (len(parts1) == 2)
+
+        function_name, rest_str = parts
+
+        if not function_name:
+            return None# It might be just a regular parentheses expression
+        
+        if not rest_str or rest_str[-1] != ')':
+            raise template.TemplateSyntaxError(
+                f'Found \'(\' with no matching \')\'. ' + \
+                f'Expression: ({expression})')
+        
+        args_str = rest_str[:-1]
+
+        if not function_name.isidentifier():
+            raise template.TemplateSyntaxError(
+                f'Error when parsing function call expression: the name \'{function_name}\' is not a valid identifier. ' + \
+                f'Expression: ({expression})')
+        
+        function = ReactiveFunction.functions.get(function_name)
+
+        if function is None:
+            raise template.TemplateSyntaxError(
+                f'Error when parsing function call expression: the reactive function \'{function_name}\' doesn\'t exist! ' + \
+                f'Expression: ({expression})')
+        
+        args = [parse_expression(arg_str) for arg_str in smart_split(args_str, (',',), skip_blank=True)]
+
+        return FunctionCallExpression(function_name, function, args)
+
 # This expression type is used only internally, and the user can't create it manually.
 class NewReactDataExpression(Expression):
     def __init__(self, data: ReactData):
@@ -694,6 +759,8 @@ def parse_expression(expression: str):
     elif exp := VariableExpression.try_parse(expression):
         return exp
     elif exp := PropertyExpression.try_parse(expression):
+        return exp
+    elif exp := FunctionCallExpression.try_parse(expression):
         return exp
     else:
         raise template.TemplateSyntaxError(f"Can't parse expression: ({expression})")
