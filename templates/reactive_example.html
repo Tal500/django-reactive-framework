@@ -326,6 +326,10 @@ id="age" required/>{%/%}
 </form>
 {%/%}
 
+{% #if len(interactive_people_array)===0 %}
+People list is empty!
+{% /if %}
+
 <table>
 <tr>
 <th>First Name</th>

@@ -6,6 +6,7 @@ from django import template
 
 from .base import ReactContext, ReactData, ReactValType, ReactHook, ReactVar, value_to_expression
 from .reactive_function import ReactiveFunction
+from .reactive_binary_operators import ReactiveBinaryOperator
 from .utils import manual_non_empty_sum, remove_whitespaces_on_boundaries, str_repr, str_repr_s, parse_string, smart_split, common_delimiters, sq
 
 class Expression:
@@ -625,7 +626,7 @@ class FunctionCallExpression(Expression):
         self.function = function
         self.args = args
 
-        self.function.validate_args(args)
+        function.validate_args(args)
     
     def __str__(self) -> str:
         return f'{self.name}({",".join(self.args)})'
@@ -645,7 +646,7 @@ class FunctionCallExpression(Expression):
         return js_expression, all_hooks
     
     @staticmethod
-    def try_parse(expression: str) -> Optional['TernaryOperatorExpression']:
+    def try_parse(expression: str) -> Optional['FunctionCallExpression']:
         parts = list(smart_split(expression, ('(',), skip_blank=False))
         if len(parts) < 2:
             return None
@@ -657,13 +658,13 @@ class FunctionCallExpression(Expression):
 
         function_name, rest_str = parts
 
+        function_name = remove_whitespaces_on_boundaries(function_name)
+
         if not function_name:
             return None# It might be just a regular parentheses expression
         
         if not rest_str or rest_str[-1] != ')':
             return None# might be another expression
-        
-        args_str = rest_str[:-1]
 
         if not function_name.isidentifier():
             return None# might be another expression
@@ -675,9 +676,75 @@ class FunctionCallExpression(Expression):
                 f'Error when parsing function call expression: the reactive function \'{function_name}\' doesn\'t exist! ' + \
                 f'Expression: ({expression})')
         
+        
+        args_str = rest_str[:-1]
         args = [parse_expression(arg_str) for arg_str in smart_split(args_str, (',',), skip_blank=True)]
 
         return FunctionCallExpression(function_name, function, args)
+
+class BinaryOperatorExpression(Expression):
+    def __init__(self, operator_symbol: str, operator: ReactiveBinaryOperator, lhs: Expression, rhs: Expression):
+        self.operator_symbol = operator_symbol
+        self.operator = operator
+        self.lhs = lhs
+        self.rhs = rhs
+
+        operator.validate_args(lhs, rhs)
+    
+    def __str__(self) -> str:
+        return f'{self.lhs} {self.operator} {self.rhs}'
+    
+    def reduce(self, template_context: template.Context):
+        lhs_reduced = self.lhs
+        rhs_reduced = self.rhs
+        return BinaryOperatorExpression(self.operator_symbol, self.operator, lhs_reduced, rhs_reduced)
+
+    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+        return self.operator.eval_initial(react_context, self.lhs, self.rhs)
+
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+        js_expression = self.operator.eval_js(react_context, delimiter, self.lhs, self.rhs)
+
+        lhs_hooks = self.lhs.eval_js_and_hooks(react_context)[1]
+        rhs_hooks = self.rhs.eval_js_and_hooks(react_context)[1]
+
+        all_hooks = list(chain(lhs_hooks, rhs_hooks))
+        
+        return js_expression, all_hooks
+    
+    @staticmethod
+    def try_parse(expression: str) -> Optional['BinaryOperatorExpression']:
+        operator_found = None
+        for symbol, operator in ReactiveBinaryOperator.operators.items():
+            parts = list(smart_split(expression, (symbol,), skip_blank=False))
+            if len(parts) == 2:
+                operator_found = operator
+                break
+            elif len(parts) > 2:
+                raise template.TemplateSyntaxError(
+                    f'Error while parsing binary operator expression: too many \'{symbol}\'. ' + \
+                    f'Expression: ({expression})')
+
+        if operator_found is None:
+            return None
+        # otherwise
+
+        lhs, rhs = parts
+
+        lhs = remove_whitespaces_on_boundaries(lhs)
+        rhs = remove_whitespaces_on_boundaries(rhs)
+
+        if not lhs:
+            raise template.TemplateSyntaxError(
+                f'Error while parsing binary operator expression: lhs is empty. ' + \
+                f'Expression: ({expression})')
+        
+        if not rhs:
+            raise template.TemplateSyntaxError(
+                f'Error while parsing binary operator expression: rhs is empty. ' + \
+                f'Expression: ({expression})')
+
+        return BinaryOperatorExpression(symbol, operator, parse_expression(lhs), parse_expression(rhs))
 
 # This expression type is used only internally, and the user can't create it manually.
 class NewReactDataExpression(Expression):
@@ -755,6 +822,8 @@ def parse_expression(expression: str):
     elif exp := VariableExpression.try_parse(expression):
         return exp
     elif exp := PropertyExpression.try_parse(expression):
+        return exp
+    elif exp := BinaryOperatorExpression.try_parse(expression):
         return exp
     elif exp := FunctionCallExpression.try_parse(expression):
         return exp
