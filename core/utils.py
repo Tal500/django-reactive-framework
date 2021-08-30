@@ -100,7 +100,7 @@ def smart_split(expression: str, seperators: Container[str],
         char = expression[loc]
 
         if len(end_delimiters_stack) == 0:
-            if char in seperators and len(end_delimiters_stack) == 0:
+            if char in seperators:
                 if i != loc or (not skip_blank):
                     yield expression[i:loc]
                 i = loc + 1
