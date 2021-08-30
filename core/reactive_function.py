@@ -8,7 +8,6 @@ from .base import ReactContext, ReactValType
 class ReactiveFunction:
     functions = dict()
 
-    @abstractmethod
     def validate_args(self, args: List['Expression']) -> None:
         pass
 
