@@ -661,16 +661,12 @@ class FunctionCallExpression(Expression):
             return None# It might be just a regular parentheses expression
         
         if not rest_str or rest_str[-1] != ')':
-            raise template.TemplateSyntaxError(
-                f'Found \'(\' with no matching \')\'. ' + \
-                f'Expression: ({expression})')
+            return None# might be another expression
         
         args_str = rest_str[:-1]
 
         if not function_name.isidentifier():
-            raise template.TemplateSyntaxError(
-                f'Error when parsing function call expression: the name \'{function_name}\' is not a valid identifier. ' + \
-                f'Expression: ({expression})')
+            return None# might be another expression
         
         function = ReactiveFunction.functions.get(function_name)
 
