@@ -75,8 +75,17 @@ def match_first(char: str, tuples: List[Tuple]):
 
     return None
 
+def matching_start(string: str, starts: Iterable[str]):
+    for start in starts:
+        if string.startswith(start):
+            return start
+    # otherwise
+
+    return None
+
 def smart_split(expression: str, seperators: Container[str],
     delimiters: List[Tuple[str, str, Any]] = common_delimiters, skip_blank: bool = True) -> Iterator[str]:
+
     i = 0
     loc = 0
 
@@ -100,10 +109,10 @@ def smart_split(expression: str, seperators: Container[str],
         char = expression[loc]
 
         if len(end_delimiters_stack) == 0:
-            if char in seperators:
+            if seperator := matching_start(expression[loc:], seperators):
                 if i != loc or (not skip_blank):
                     yield expression[i:loc]
-                i = loc + 1
+                i = loc + len(seperator)
             elif tuple := match_first(char, delimiters):
                 loc = process_delimiter(tuple, loc) - 1
         else:
