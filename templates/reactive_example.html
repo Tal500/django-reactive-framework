@@ -362,9 +362,10 @@ onclick="add_above_by_first_name('"+person.first+"');" />{%/%}
 <script>
 function change_allow_insertion() {
     {% #set disable_insertion %}
-    !{% #/get disable_insertion %}
+    !document.getElementById('allow_insertion_checkbox').checked
     {% /set %}
 }
+change_allow_insertion();
 
 function get_current_person() {
     return {
