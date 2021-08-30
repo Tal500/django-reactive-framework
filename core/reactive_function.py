@@ -1,12 +1,12 @@
 from abc import abstractmethod
-from typing import List
+from typing import List, Dict
 
 from django import template
 
 from .base import ReactContext, ReactValType
 
 class ReactiveFunction:
-    functions = dict()
+    functions: Dict[str, 'ReactiveFunction'] = dict()
 
     def validate_args(self, args: List['Expression']) -> None:
         pass
