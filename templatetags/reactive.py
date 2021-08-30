@@ -226,7 +226,9 @@ class ReactTagNode(ReactNode):
         def set_attribute_js_expression(self, element_js: str, attribute: str,
             js_cond_exp: Optional[str], js_val_exp: Optional[str]) -> str:
 
-            if (js_cond_exp is not None) or (js_val_exp is None) or attribute.startswith('data-'):
+            if ((js_cond_exp is not None) or (js_val_exp is None) or attribute.startswith('data-')) and \
+                attribute != 'checked':# TODO: Make this exception only for 'input' tags
+
                 if js_val_exp is None:
                     js_val_exp = f"'{attribute}'"
                 
