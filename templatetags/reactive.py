@@ -1085,6 +1085,7 @@ class ReactPrintNode(ReactNode):
                     '\n}\n' + \
                     '\n'.join((f'{control_var.js_get()}.attachment_{hook.get_name()} = {hook.js_attach("proc", False)};' \
                         for hook in hooks)) + '\n' + \
+                    f'{print_var.js_detach_all()}\n' + \
                     'proc();\n' + \
                 '}\n'
             
