@@ -800,8 +800,14 @@ class EscapingContainerExpression(Expression):
 
 def parse_expression(expression: str):
     expression = remove_whitespaces_on_boundaries(expression)
-    
+
+    is_parentheses = False
     if expression[0] == '(' and expression[-1] == ')':
+        parts = list(smart_split(expression[1:], [')'], skip_blank=False))
+        if len(parts) == 2 and not parts[1]:
+            is_parentheses = True
+    
+    if is_parentheses:
         return parse_expression(expression[1:-1])
     elif exp := TernaryOperatorExpression.try_parse(expression):
         return exp
