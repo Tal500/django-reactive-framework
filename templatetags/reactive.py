@@ -238,7 +238,7 @@ class ReactTagNode(ReactNode):
                 js_val_exp = js_cond_exp
                 js_cond_exp = None
 
-            if ((js_cond_exp is not None) or (js_val_exp is None) or attribute.startswith('data-')):
+            if ((js_cond_exp is not None) or (js_val_exp is None) or attribute.startswith(('data-', 'on'))):
                 if js_val_exp is None:
                     js_val_exp = f"'{attribute}'"
                 
