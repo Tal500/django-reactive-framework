@@ -14,15 +14,32 @@ function __reactive_dll_push(self, val) {
 }
 
 function __reactive_remove_node(self, node) {
-    if (node.prev === null)
-        self.head = node.next;
-    else
+    if (node.prev === null) {
+        if (self.head === node)// Must verify it since we might clear all earlier (it's legal)
+            self.head = node.next;
+    } else
         node.prev.next = node.next;
     
-    if (node.next === null)
-        self.tail = node.prev;
-    else
+    if (node.next === null) {
+        if (self.tail === node)// Must verify it since we might clear all earlier (it's legal)
+            self.tail = node.prev;
+    } else
         node.next.prev = node.prev;
+}
+
+function __reactive_clear_nodes(self) {
+    var current = self.head;
+    self.head = null;
+    self.tail = null;
+
+    while (current !== null) {
+        const next = current.next;
+        
+        current.prev = null;
+        current.next = null;
+
+        current = next;
+    }
 }
 
 var __reactive_check_array_func = Array.isArray
@@ -33,7 +50,7 @@ if (typeof __reactive_check_array_func === 'undefined') {
 }
 
 function __reactive_data(initial_val) {
-    return {val:initial_val,changed_from_initial:false,attached:{head:null,tail:null}}
+    return {val:initial_val,changed_from_initial:false,attached:{head:null,tail:null}};
 }
 
 function __reactive_data_attach(self, cb, invoke_if_changed_from_initial) {
@@ -45,7 +62,11 @@ function __reactive_data_attach(self, cb, invoke_if_changed_from_initial) {
 }
 
 function __reactive_data_detach(self, attachment) {
-    __reactive_remove_node(self.attached,attachment)
+    __reactive_remove_node(self.attached,attachment);
+}
+
+function __reactive_data_detach_all(self) {
+    __reactive_clear_nodes(self.attached);
 }
 
 function __reactive_data_notify(self) {
