@@ -258,7 +258,7 @@ class ReactTagNode(ReactNode):
                 if val_expression is not None:
                     val_expression, val_hooks = val_expression.eval_js_and_hooks(self)
                 
-                return cond_expression, val_expression, chain(cond_hooks, val_hooks)
+                return cond_expression, val_expression, list(chain(cond_hooks, val_hooks))
 
             return {
                 key: attribute_js_expressions_and_hooks(expressions) for key, expressions in computed_attributes.items()
@@ -302,11 +302,11 @@ class ReactTagNode(ReactNode):
                 if not self.self_enclosed else '') + \
                 script.initial_post_calc + '\n' + \
                 ';}\n' + \
-                '\n'.join( chain.from_iterable((f'{control_var.js_get()}.attachment_attribute_{hook.get_name()} = ' + \
-                hook.js_attach(change_attribute(id_js_expression, attribute, js_cond_exp, js_vaL_exp), True) \
+                '\n'.join(chain.from_iterable((f'{control_var.js_get()}.attachment_attribute_{attribute}_var_{hook.get_name()} = ' + \
+                hook.js_attach(change_attribute(id_js_expression, attribute, js_cond_exp, js_vaL_exp), True) + ';' \
                 for hook in _hooks) \
                 for attribute, (js_cond_exp, js_vaL_exp, _hooks) in all_attributes_js_expressions_and_hooks.items())) + \
-                ';\n' + \
+                '\n' + \
                 '\n'.join((f'{control_var.js_get()}.attachment_content_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
                 script.initial_post_calc + \
                 '\n})();'
@@ -314,7 +314,13 @@ class ReactTagNode(ReactNode):
             script.destructor = '( () => {\n' + \
                 '// Tag destructor\n' + \
                 '\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_content_{hook.get_name()}') for hook in hooks)) + \
-                '\n' + script.destructor + '} )();'
+                '\n' + \
+                '\n'.join(chain.from_iterable(
+                    (hook.js_detach(f'{control_var.js_get()}.attachment_attribute_{attribute}_var_{hook.get_name()}') \
+                    for hook in _hooks) \
+                for attribute, (js_cond_exp, js_vaL_exp, _hooks) in all_attributes_js_expressions_and_hooks.items())) + \
+                '\n' + \
+                script.destructor + '} )();'
             
             return script
     
@@ -719,6 +725,7 @@ class ReactForNode(ReactNode):
             vars_but_iter = list(filter((iter_var).__ne__, vars))
             
             iter_val_js, iter_hooks = self.iter_expression.eval_js_and_hooks(self)
+            iter_hooks = list(iter_hooks)
 
             control_var = ReactVar(self.control_var_name, None)
             self.add_var(control_var)
@@ -868,6 +875,10 @@ class ReactForNode(ReactNode):
             
             script.destructor = '( () => {' + \
                 f'// For loop destructor\n' + \
+                ('\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_{hook.get_name()}') \
+                    for hook in iter_hooks)) + \
+                '\n'
+                if self.key_expression else '') + \
                 f'for (var i = 0; i < {control_var.js_get()}.iters.length; ++i) {{\n' + \
                 '\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_{hook.get_name()}') for hook in iter_hooks)) + \
                 '\n' + defs + '\n' + script.destructor + '} } )();'
