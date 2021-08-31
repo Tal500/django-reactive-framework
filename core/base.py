@@ -104,7 +104,7 @@ class ReactVar(ReactData):
         return f'__reactive_data_set({self.js() if alt_js_name is None else alt_js_name},{js_expression});'
     
     def js_attach(self, js_callable: str, invoke_if_changed_from_initial: bool):
-        return f'__reactive_data_attach({self.js()},{js_callable},{value_js_representation(invoke_if_changed_from_initial, self.context)});'
+        return f'__reactive_data_attach({self.js()},{js_callable},{value_js_representation(invoke_if_changed_from_initial, self.context)})'
 
     def js_detach(self, js_attachment: str):
         return f'__reactive_data_detach({self.js()},{js_attachment});'
