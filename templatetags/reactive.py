@@ -319,8 +319,7 @@ class ReactTagNode(ReactNode):
                 for hook in _hooks) \
                 for attribute, (js_cond_exp, js_vaL_exp, _hooks) in all_attributes_js_expressions_and_hooks.items())) + \
                 '\n' + \
-                '\n'.join((f'{control_var.js_get()}.attachment_content_{hook.get_name()} = {hook.js_attach("proc", True)};' for hook in hooks)) + \
-                script.initial_post_calc + \
+                f'{control_var.js_get()}.inner_post();\n' + \
                 '\n})();'
 
             script.destructor = '( () => {\n' + \
