@@ -890,10 +890,9 @@ class ReactForNode(ReactNode):
                 f'// For loop destructor\n' + \
                 ('\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_{hook.get_name()}') \
                     for hook in iter_hooks)) + \
-                '\n'
+                '\n' \
                 if self.key_expression else '') + \
                 f'for (var i = 0; i < {control_var.js_get()}.iters.length; ++i) {{\n' + \
-                '\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_{hook.get_name()}') for hook in iter_hooks)) + \
                 '\n' + defs + '\n' + script.destructor + '} } )();'
 
             return script
