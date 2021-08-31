@@ -302,15 +302,17 @@ class ReactTagNode(ReactNode):
             
             script.initial_post_calc = '( () => {\n' + \
                 '// Tag post calc\n' + \
+                f'{control_var.js_get()}.inner_post = function() {{\n{script.initial_post_calc}\n}};\n' + \
+                f'{control_var.js_get()}.inner_destructor = function() {{\n{script.destructor}\n}};\n' + \
                 'function proc() {\n' + \
                 f'if(!{first_expression.eval_js_and_hooks(self)[0]}) {{\n' + \
-                script.destructor + \
-                '\n' + first_expression.js_set(self, 'false') + \
+                f'{control_var.js_get()}.inner_destructor();\n' + \
+                first_expression.js_set(self, 'false') + \
                 '\n}\n' + \
                 script.initial_pre_calc + \
                 (f'document.getElementById({id_js_expression}).innerHTML = ' + js_rerender_expression + ';\n'
                 if not self.self_enclosed else '') + \
-                script.initial_post_calc + '\n' + \
+                f'{control_var.js_get()}.inner_post();\n' + \
                 ';}\n' + \
                 '\n'.join(chain.from_iterable((f'{control_var.js_get()}.attachment_attribute_{attribute}_var_{hook.get_name()} = ' + \
                 hook.js_attach(change_attribute(id_js_expression, attribute, js_cond_exp, js_vaL_exp), True) + ';' \
@@ -330,7 +332,8 @@ class ReactTagNode(ReactNode):
                     for hook in _hooks) \
                 for attribute, (js_cond_exp, js_vaL_exp, _hooks) in all_attributes_js_expressions_and_hooks.items())) + \
                 '\n' + \
-                script.destructor + '} )();'
+                f'{control_var.js_get()}.inner_destructor();\n' + \
+                '} )();'
             
             return script
     
