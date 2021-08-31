@@ -108,6 +108,9 @@ class ReactVar(ReactData):
 
     def js_detach(self, js_attachment: str):
         return f'__reactive_data_detach({self.js()},{js_attachment});'
+
+    def js_detach_all(self):
+        return f'__reactive_data_detach_all({self.js()});'
     
     def js_notify(self, alt_js_name: Optional[str] = None):
         return f'__reactive_data_notify({self.js() if alt_js_name is None else alt_js_name});'
