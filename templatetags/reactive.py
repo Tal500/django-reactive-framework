@@ -184,7 +184,7 @@ class ReactTagNode(ReactNode):
             return SumExpression(list(itertools.chain.from_iterable(exp_iter)))
         
         def make_control_var(self) -> ReactVar:
-            control_var = ReactVar(self.control_var_name, value_to_expression({'first': True}))
+            control_var = ReactVar(self.control_var_name, value_to_expression({}))
             self.add_var(control_var)
 
             return control_var
@@ -305,14 +305,11 @@ class ReactTagNode(ReactNode):
                 f'{control_var.js_get()}.inner_post = function() {{\n{script.initial_post_calc}\n}};\n' + \
                 f'{control_var.js_get()}.inner_destructor = function() {{\n{script.destructor}\n}};\n' + \
                 'function proc() {\n' + \
-                f'if(!{first_expression.eval_js_and_hooks(self)[0]}) {{\n' + \
-                f'{control_var.js_get()}.inner_destructor();\n' + \
-                first_expression.js_set(self, 'false') + \
-                '\n}\n' + \
-                script.initial_pre_calc + \
-                (f'document.getElementById({id_js_expression}).innerHTML = ' + js_rerender_expression + ';\n'
-                if not self.self_enclosed else '') + \
-                f'{control_var.js_get()}.inner_post();\n' + \
+                    f'{control_var.js_get()}.inner_destructor();\n' + \
+                    script.initial_pre_calc + '\n' + \
+                    (f'document.getElementById({id_js_expression}).innerHTML = ' + js_rerender_expression + ';\n'
+                    if not self.self_enclosed else '') + \
+                    f'{control_var.js_get()}.inner_post();\n' + \
                 ';}\n' + \
                 '\n'.join(chain.from_iterable((f'{control_var.js_get()}.attachment_attribute_{attribute}_var_{hook.get_name()} = ' + \
                 hook.js_attach(change_attribute(id_js_expression, attribute, js_cond_exp, js_vaL_exp), True) + ';' \
@@ -320,6 +317,8 @@ class ReactTagNode(ReactNode):
                 for attribute, (js_cond_exp, js_vaL_exp, _hooks) in all_attributes_js_expressions_and_hooks.items())) + \
                 '\n' + \
                 f'{control_var.js_get()}.inner_post();\n' + \
+                '\n'.join((f'{control_var.js_get()}.attachment_content_{hook.get_name()} = {hook.js_attach("proc", True)};' \
+                    for hook in hooks)) + \
                 '\n})();'
 
             script.destructor = '( () => {\n' + \
