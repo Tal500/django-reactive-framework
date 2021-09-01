@@ -22,18 +22,21 @@ Kepp in mind that this package is still under development.
 
 # Example
 
-You may see example usage by adding the following to urlpatterns (listed in src/django_reactive/urls.py):
+You can start see an example by two methods:
 
-    urlpatterns += [
-        path('reactive_example/', include('django_reactive.urls'))
-    ]
+* Starting the example server:
+    1. Open the command line, cd to example dir, and execute the following:
+        python manage.py runserver
+    2. Open your browser and brose to:
+        http://127.0.0.1:8000/
+* Import the example urls to your server (listed in src/django_reactive/urls.py):
+    1. Add the following patterns to yout urls.py:
+        urlpatterns += [
+            path('reactive_example/', include('django_reactive.urls'))
+        ]
+    2. Then, the example will be in the path reactive_example/example/ in your server.
 
-By starting a new django project or importing it to existing one.
-
-Then, you may open the following path for an example:
-    reactive_example/example/
-
-Look more at src/django_reactive/example/reactive_example.html for its source.
+Look more at src/django_reactive/templates/reactive_example.html for the source of the example.
 
 # Communication
 
