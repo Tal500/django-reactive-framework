@@ -326,12 +326,21 @@ id="age" required/>{%/%}
 </form>
 {%/%}
 
+{% comment %}
+We put this reactive div as a temporary fix,
+ since reactive if gets rerender too often,
+ and destroys the idea about keeping states in the keyed loop (TODO: fix it)
+{% endcomment %}
+{%#%}
+<div>
 {% #if len(interactive_people_array)===0 %}
 People list is empty!
 {% /if %}
 {% #if (len(interactive_people_array) !== 0)&&(len(interactive_people_array)>0) %}
 People list:
 {% /if %}
+</div>
+{%/%}
 
 <table>
 <tr>
