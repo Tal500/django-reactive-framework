@@ -10,9 +10,9 @@ This project is experimental and under development.
 # Installation
 You can install this package by two ways:
 
-*. The easy way - Type the following to a command line:
+* The easy way - Type the following to a command line:
     pip install --upgrade git+git://github.com/Tal500/django-reactive.git
-*. The deep way (for internal development):
+* The deep way (for internal development):
     1. Clone the package:
         git clone https://github.com/Tal500/rsvp-web.git
     2. Add the path for the repository directory 'src' to your system PYTHONPATH.
