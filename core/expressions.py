@@ -629,7 +629,7 @@ class FunctionCallExpression(Expression):
         function.validate_args(args)
     
     def __str__(self) -> str:
-        return f'{self.name}({",".join(self.args)})'
+        return f'{self.name}({",".join(str(arg) for arg in self.args)})'
     
     def reduce(self, template_context: template.Context):
         args_reduced = [arg.reduce(template_context) for arg in self.args]
