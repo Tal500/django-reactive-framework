@@ -10,7 +10,8 @@ from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
-from ..core.expressions import EscapingContainerExpression, Expression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, TernaryOperatorExpression, VariableExpression, parse_expression
+from ..core.expressions import EscapingContainerExpression, Expression, FunctionCallExpression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, TernaryOperatorExpression, VariableExpression, parse_expression
+from ..core.reactive_function import CustomReactiveFunction
 
 from ..core.utils import reduce_nodelist, remove_whitespaces_on_boundaries, split_kwargs, str_repr_s, smart_split, common_delimiters, dq, whitespaces
 
@@ -302,22 +303,31 @@ class ReactTagNode(ReactNode):
             
             script.initial_post_calc = '( () => {\n' + \
                 '// Tag post calc\n' + \
-                f'{control_var.js_get()}.inner_post = function() {{\n{script.initial_post_calc}\n}};\n' + \
-                f'{control_var.js_get()}.inner_destructor = function() {{\n{script.destructor}\n}};\n' + \
-                'function proc() {\n' + \
+                'var __reactive_block_reset = true;\n' + \
+                'var __reactive_need_reset = false;\n' + \
+                'function __reactive_reset_content() {\n' + \
+                    'if (__reactive_block_reset) { __reactive_need_reset=true; return;};\n' + \
+                    '__reactive_block_reset = true;\n' + \
+                    '__reactive_need_reset = false;\n' + \
                     f'{control_var.js_get()}.inner_destructor();\n' + \
                     script.initial_pre_calc + '\n' + \
                     (f'document.getElementById({id_js_expression}).innerHTML = ' + js_rerender_expression + ';\n'
                     if not self.self_enclosed else '') + \
                     f'{control_var.js_get()}.inner_post();\n' + \
+                    '__reactive_block_reset = false;\n' + \
+                    'if (__reactive_need_reset) { __reactive_reset_content();};\n' + \
                 ';}\n' + \
+                f'{control_var.js_get()}.inner_post = function() {{\n{script.initial_post_calc}\n}};\n' + \
+                f'{control_var.js_get()}.inner_destructor = function() {{\n{script.destructor}\n}};\n' + \
                 '\n'.join(chain.from_iterable((f'{control_var.js_get()}.attachment_attribute_{attribute}_var_{hook.get_name()} = ' + \
                 hook.js_attach(change_attribute(id_js_expression, attribute, js_cond_exp, js_vaL_exp), True) + ';' \
                 for hook in _hooks) \
                 for attribute, (js_cond_exp, js_vaL_exp, _hooks) in all_attributes_js_expressions_and_hooks.items())) + \
                 '\n' + \
                 f'{control_var.js_get()}.inner_post();\n' + \
-                '\n'.join((f'{control_var.js_get()}.attachment_content_{hook.get_name()} = {hook.js_attach("proc", True)};' \
+                '__reactive_block_reset = false;\n' + \
+                'if (__reactive_need_reset) { __reactive_reset_content();};\n' + \
+                '\n'.join((f'{control_var.js_get()}.attachment_content_{hook.get_name()} = {hook.js_attach("__reactive_reset_content", True)};' \
                     for hook in hooks)) + \
                 '\n})();'
 
@@ -1035,11 +1045,18 @@ class ReactPrintNode(ReactNode):
         def var_js(self, var):
             return f'{var.name}_{self.id}'
 
+        render_html_func = CustomReactiveFunction(
+            eval_initial_func=lambda reactive_context, args:
+                str(args[0].eval_initial(reactive_context)),
+            eval_js_func=lambda reactive_context, delimiter, args:
+                args[0].eval_js_html_output_and_hooks(reactive_context, delimiter)[0],
+        )
+
         def make_vars(self) -> Tuple[ReactVar, ReactVar]:
             control_var = ReactVar('print_control', value_to_expression({}))
             self.add_var(control_var)
 
-            print_var = ReactVar('print_var', self.expression)
+            print_var = ReactVar('print_var', FunctionCallExpression('render_html', self.render_html_func, [self.expression]))
             self.add_var(print_var)
 
             return control_var, print_var
@@ -1066,7 +1083,7 @@ class ReactPrintNode(ReactNode):
             
             control_var, print_var = self.make_vars()
 
-            return VariableExpression(print_var.name).eval_js_html_output_and_hooks(self)[0], [print_var]
+            return VariableExpression(print_var.name).eval_js_html_output_and_hooks(self)[0], []
 
         def render_script(self, subtree: Optional[List]) -> str:
             # TODO: HTML escaping?
@@ -1079,11 +1096,12 @@ class ReactPrintNode(ReactNode):
             script.initial_post_calc = \
                 '{\n' + \
                     'function proc() {\n' + \
-                        print_var.js_set(js_html_expression) + \
+                        f'const has_changed = {print_var.js_set(js_html_expression)}\n' + \
+                        f'if (has_changed)\n' + \
+                            f'__reactive_reset_content();\n' + \
                     '\n}\n' + \
                     '\n'.join((f'{control_var.js_get()}.attachment_{hook.get_name()} = {hook.js_attach("proc", False)};' \
                         for hook in hooks)) + '\n' + \
-                    f'{print_var.js_detach_all()}\n' + \
                     'proc();\n' + \
                 '}\n'
             
