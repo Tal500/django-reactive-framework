@@ -83,7 +83,9 @@ function __reactive_data_set(self, new_val) {
     if (self.val !== new_val || (new_val && (new_val.constructor == Object || __reactive_check_array_func(new_val)))) {
         self.val = new_val;
         __reactive_data_notify(self);
-    }
+        return true;
+    } else
+        return false;
 }
 
 function __reactive_print_html(obj) {
