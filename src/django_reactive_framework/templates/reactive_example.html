@@ -264,8 +264,7 @@ setTimeout(
 {% #if changing_color %}
 This is text change its color randomally using reactive tag attribute.
 {% /if %}
-{% comment %} Use invertion operator ('!') after it's supported instead. {% endcomment %}
-{% #if changing_color?False:True %}
+{% #if !changing_color %}
 This text stopped changing color!
 {% /if %}
 </div>

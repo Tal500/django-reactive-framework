@@ -4,9 +4,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from django import template
 
-from .base import ReactContext, ReactData, ReactValType, ReactHook, ReactVar, value_to_expression
+from .base import ReactContext, ReactData, ReactValType, ReactHook, ReactVar, value_js_representation, value_to_expression
 from .reactive_function import ReactiveFunction
 from .reactive_binary_operators import ReactiveBinaryOperator
+from .reactive_unary_operators import ReactiveUnaryOperator
 from .utils import manual_non_empty_sum, remove_whitespaces_on_boundaries, str_repr, str_repr_s, parse_string, smart_split, common_delimiters, sq
 
 class Expression:
@@ -725,6 +726,56 @@ class SumExpression(BinaryOperatorExpression):
         else:
             return SumExpression(args)
 
+class UnaryOperatorExpression(Expression):
+    def __init__(self, operator_symbol: str, operator: ReactiveUnaryOperator, arg: Expression):
+        self.operator_symbol = operator_symbol
+        self.operator = operator
+        self.arg = arg
+
+        operator.validate_arg(arg)
+    
+    def __str__(self) -> str:
+        return f'{self.operator_symbol}{self.arg}'
+    
+    @property
+    def constant(self) -> bool:
+        return self.arg.constant
+    
+    def reduce(self, template_context: template.Context):
+        arg_reduced = self.arg.reduce(template_context)
+        return UnaryOperatorExpression(self.operator_symbol, self.operator, arg_reduced)
+
+    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+        return self.operator.eval_initial(react_context, self.arg)
+
+    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+        if self.constant:
+            return value_js_representation(self.eval_initial(react_context), react_context, delimiter=delimiter), []
+        # otherwise
+
+        js_expression = self.operator.eval_js(react_context, self.arg, delimiter)
+
+        hooks = self.arg.eval_js_and_hooks(react_context)[1]
+        
+        return js_expression, hooks
+    
+    @staticmethod
+    def try_parse(expression: str) -> Optional['UnaryOperatorExpression']:
+        operator_found = None
+        for symbol, operator in ReactiveUnaryOperator.operators.items():
+            if expression.startswith(symbol):
+                operator_found = operator
+                expression = expression[len(symbol):]
+                break
+
+        if operator_found is None:
+            return None
+        # otherwise
+
+        arg = parse_expression(expression)
+
+        return UnaryOperatorExpression(symbol, operator, arg)
+
 # This expression type is used only internally, and the user can't create it manually.
 class NewReactDataExpression(Expression):
     def __init__(self, data: ReactData):
@@ -806,6 +857,8 @@ def parse_expression(expression: str):
     elif exp := VariableExpression.try_parse(expression):
         return exp
     elif exp := PropertyExpression.try_parse(expression):
+        return exp
+    elif exp := UnaryOperatorExpression.try_parse(expression):
         return exp
     elif exp := BinaryOperatorExpression.try_parse(expression):
         return exp
