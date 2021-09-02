@@ -33,7 +33,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'django_reactive',
+    'django_reactive_framework',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
