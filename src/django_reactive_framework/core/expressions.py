@@ -683,32 +683,27 @@ class FunctionCallExpression(Expression):
         return FunctionCallExpression(function_name, function, args)
 
 class BinaryOperatorExpression(Expression):
-    def __init__(self, operator_symbol: str, operator: ReactiveBinaryOperator, lhs: Expression, rhs: Expression):
+    def __init__(self, operator_symbol: str, operator: ReactiveBinaryOperator, args: List[Expression]):
         self.operator_symbol = operator_symbol
         self.operator = operator
-        self.lhs = lhs
-        self.rhs = rhs
+        self.args = args
 
-        operator.validate_args(lhs, rhs)
+        operator.validate_args(args)
     
     def __str__(self) -> str:
-        return f'{self.lhs} {self.operator} {self.rhs}'
+        return self.operator_symbol.join(str(arg) for arg in self.args)
     
     def reduce(self, template_context: template.Context):
-        lhs_reduced = self.lhs
-        rhs_reduced = self.rhs
-        return BinaryOperatorExpression(self.operator_symbol, self.operator, lhs_reduced, rhs_reduced)
+        args_reduced = [arg.reduce(template_context) for arg in self.args]
+        return BinaryOperatorExpression(self.operator_symbol, self.operator, args_reduced)
 
     def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
-        return self.operator.eval_initial(react_context, self.lhs, self.rhs)
+        return self.operator.eval_initial(react_context, self.args)
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
-        js_expression = self.operator.eval_js(react_context, delimiter, self.lhs, self.rhs)
+        js_expression = self.operator.eval_js(react_context, self.args, delimiter)
 
-        lhs_hooks = self.lhs.eval_js_and_hooks(react_context)[1]
-        rhs_hooks = self.rhs.eval_js_and_hooks(react_context)[1]
-
-        all_hooks = list(chain(lhs_hooks, rhs_hooks))
+        all_hooks = list(chain.from_iterable(arg.eval_js_and_hooks(react_context)[1] for arg in self.args))
         
         return js_expression, all_hooks
     
@@ -717,34 +712,25 @@ class BinaryOperatorExpression(Expression):
         operator_found = None
         for symbol, operator in ReactiveBinaryOperator.operators.items():
             parts = list(smart_split(expression, (symbol,), skip_blank=False))
-            if len(parts) == 2:
+            if len(parts) >= 2:
                 operator_found = operator
                 break
-            elif len(parts) > 2:
-                raise template.TemplateSyntaxError(
-                    f'Error while parsing binary operator expression: too many \'{symbol}\'. ' + \
-                    f'Expression: ({expression})')
 
         if operator_found is None:
             return None
         # otherwise
 
-        lhs, rhs = parts
+        arg_strings = [remove_whitespaces_on_boundaries(arg_str) for arg_str in parts]
 
-        lhs = remove_whitespaces_on_boundaries(lhs)
-        rhs = remove_whitespaces_on_boundaries(rhs)
-
-        if not lhs:
-            raise template.TemplateSyntaxError(
-                f'Error while parsing binary operator expression: lhs is empty. ' + \
-                f'Expression: ({expression})')
+        for i, arg_str in enumerate(arg_strings):
+            if not arg_str:
+                raise template.TemplateSyntaxError(
+                    f'Error while parsing binary operator expression: Argument {i} is empty. ' + \
+                    f'Expression: ({expression})')
         
-        if not rhs:
-            raise template.TemplateSyntaxError(
-                f'Error while parsing binary operator expression: rhs is empty. ' + \
-                f'Expression: ({expression})')
+        args = [parse_expression(arg) for arg in arg_strings]
 
-        return BinaryOperatorExpression(symbol, operator, parse_expression(lhs), parse_expression(rhs))
+        return BinaryOperatorExpression(symbol, operator, args)
 
 # This expression type is used only internally, and the user can't create it manually.
 class NewReactDataExpression(Expression):

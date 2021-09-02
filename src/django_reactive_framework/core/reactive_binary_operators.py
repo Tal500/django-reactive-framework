@@ -1,38 +1,43 @@
 from abc import abstractmethod
-from typing import Dict
+from typing import Dict, List
 
 from .base import ReactContext, ReactValType
 
 class ReactiveBinaryOperator:
     operators: Dict[str, 'ReactiveBinaryOperator'] = dict()
 
-    def validate_args(self, lhs: 'Expression', rhs: 'Expression') -> None:
-        pass
+    def validate_args(self, args: List['Expression']) -> None:
+        if len(args) < 2:
+            raise Exception(f'Internal Reactive Error: Not enough args for binary operator! Args: {args}')
     
-    def eval_initial_from_value(self, lhs_val: ReactValType, rhs_val: ReactValType) -> ReactValType:
+    def eval_initial_from_values(self, vals: List[ReactValType]) -> ReactValType:
         pass
 
-    def eval_js_from_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
+    def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
         pass
 
-    def eval_initial(self, reactive_context: ReactContext, lhs: 'Expression', rhs: 'Expression') -> ReactValType:
-        self.validate_args(lhs, rhs)
+    def eval_initial(self, reactive_context: ReactContext, args: List['Expression']) -> ReactValType:
+        self.validate_args(args)
         
-        lhs_val = lhs.eval_initial(reactive_context)
-        rhs_val = rhs.eval_initial(reactive_context)
+        vals = [arg.eval_initial(reactive_context) for arg in args]
 
-        return self.eval_initial_from_value(lhs_val, rhs_val)
+        return self.eval_initial_from_values(vals)
 
-    def eval_js(self, reactive_context: ReactContext, delimiter: str, lhs: 'Expression', rhs: 'Expression') -> str:
-        self.validate_args(lhs, rhs)
+    def eval_js(self, reactive_context: ReactContext, args: List['Expression'], delimiter: str) -> str:
+        self.validate_args(args)
         
-        lhs_val = lhs.eval_js_and_hooks(reactive_context, delimiter)[0]
-        rhs_val = rhs.eval_js_and_hooks(reactive_context, delimiter)[0]
+        vals = [arg.eval_js_and_hooks(reactive_context, delimiter)[0] for arg in args]
 
-        return self.eval_js_from_js(lhs_val, rhs_val, delimiter)
+        return self.eval_js_from_js(vals, delimiter)
 
 class StrictEqualityOperator(ReactiveBinaryOperator):
-    def eval_initial_from_value(self, lhs_val: ReactValType, rhs_val: ReactValType) -> ReactValType:
+    def validate_args(self, args: List['Expression']) -> None:
+        if len(args) != 2:
+            raise template.TemplateSyntaxError(f'Strict equality operator must have exactly two args! Args: {args}')
+    
+    def eval_initial_from_values(self, vals: List[ReactValType]) -> ReactValType:
+        lhs_val, rhs_val = vals
+
         result = lhs_val is rhs_val
 
         if not result and isinstance(lhs_val, str) and isinstance(rhs_val, str):
@@ -40,13 +45,21 @@ class StrictEqualityOperator(ReactiveBinaryOperator):
         
         return result
 
-    def eval_js_from_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
+    def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
+        lhs_js, rhs_js = js_expressions
+        
         return f'({lhs_js}==={rhs_js})'
 
 ReactiveBinaryOperator.operators['==='] = StrictEqualityOperator()
 
 class StrictInequalityOperator(ReactiveBinaryOperator):
-    def eval_initial_from_value(self, lhs_val: ReactValType, rhs_val: ReactValType) -> ReactValType:
+    def validate_args(self, args: List['Expression']) -> None:
+        if len(args) != 2:
+            raise template.TemplateSyntaxError(f'Strict inequality operator must have exactly two args! Args: {args}')
+    
+    def eval_initial_from_values(self, vals: List[ReactValType]) -> ReactValType:
+        lhs_val, rhs_val = vals
+        
         result = lhs_val is not rhs_val
 
         if result and isinstance(lhs_val, str) and isinstance(rhs_val, str):
@@ -54,72 +67,105 @@ class StrictInequalityOperator(ReactiveBinaryOperator):
         
         return result
 
-    def eval_js_from_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
+    def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
+        lhs_js, rhs_js = js_expressions
         return f'({lhs_js}!=={rhs_js})'
 
 ReactiveBinaryOperator.operators['!=='] = StrictInequalityOperator()
 
 class BoolComparingOperator(ReactiveBinaryOperator):
     @abstractmethod
-    def eval_initial_from_value(self, lhs_val: bool, rhs_val: bool) -> bool:
+    def eval_initial_from_values(self, vals: List[bool]) -> bool:
         pass
 
-    def eval_initial(self, reactive_context: ReactContext, lhs: 'Expression', rhs: 'Expression') -> bool:
-        self.validate_args(lhs, rhs)
-        
-        lhs_val = lhs.eval_initial(reactive_context)
-        rhs_val = rhs.eval_initial(reactive_context)
-
-        if not isinstance(lhs_val, bool):
-            raise template.TemplateSyntaxError('Error: lhs value isn\'t bool in bool comparing operator')
-
-        if not isinstance(rhs_val, bool):
-            raise template.TemplateSyntaxError('Error: rhs value isn\'t bool in bool comparing operator')
-
-        return self.eval_initial_from_value(lhs_val, rhs_val)
+    def eval_initial(self, reactive_context: ReactContext, args: List['Expression']) -> bool:
+        return super().eval_initial(reactive_context, args)
 
 class AndOperator(BoolComparingOperator):
-    def eval_initial_from_value(self, lhs_val: ReactValType, rhs_val: ReactValType) -> bool:
-        return lhs_val and rhs_val
+    def eval_initial_from_values(self, vals: List[bool]) -> bool:
+        for val in vals:
+            if val is False:
+                return False
+        # otherwise
 
-    def eval_js_from_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
-        return f'{lhs_js}&&{rhs_js}'
+        return True
+
+    def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
+        return '&&'.join(js_expressions)
 
 ReactiveBinaryOperator.operators['&&'] = AndOperator()
 
 class OrOperator(BoolComparingOperator):
-    def eval_initial_from_value(self, lhs_val: ReactValType, rhs_val: ReactValType) -> bool:
-        return lhs_val or rhs_val
+    def eval_initial_from_values(self, vals: List[bool]) -> bool:
+        for val in vals:
+            if val is True:
+                return True
+        # otherwise
 
-    def eval_js_from_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
-        return f'{lhs_js}||{rhs_js}'
+        return False
+
+    def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
+        return '||'.join(js_expressions)
 
 ReactiveBinaryOperator.operators['||'] = OrOperator()
 
 class NumberInequalityOperator(ReactiveBinaryOperator):
     @abstractmethod
-    def eval_initial_from_value(self, lhs_val: int, rhs_val: int) -> bool:
+    def eval_initial_from_two_values(self, lhs_val: int, rhs_val: int) -> bool:
         pass
 
-    def eval_initial(self, reactive_context: ReactContext, lhs: 'Expression', rhs: 'Expression') -> bool:
-        self.validate_args(lhs, rhs)
+    @abstractmethod
+    def eval_js_from_two_js(self, lhs_js: List[str], rhs_js: List[str], delimiter: str) -> str:
+        pass
+
+    def validate_args(self, args: List['Expression']):
+        super().validate_args(args)
+        if len(args) != 2:
+            raise template.TemplateSyntaxError(f'Number inequality operators must have exactly two args! Args: {args}')
         
-        lhs_val = lhs.eval_initial(reactive_context)
-        rhs_val = rhs.eval_initial(reactive_context)
+    def eval_initial_from_values(self, vals: List[int]) -> bool:
+        return self.eval_initial_from_two_values(vals[0], vals[1])
+    
+    def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
+        return self.eval_js_from_two_js(js_expressions[0], js_expressions[1], delimiter)
 
-        if not isinstance(lhs_val, int):
-            raise template.TemplateSyntaxError('Error: lhs value isn\'t number in number inequality operator')
+    def eval_initial(self, reactive_context: ReactContext, args: List['Expression']) -> bool:
+        self.validate_args(args)
+        
+        vals = [arg.eval_initial(reactive_context) for arg in args]
 
-        if not isinstance(rhs_val, int):
-            raise template.TemplateSyntaxError('Error: rhs value isn\'t number in number inequality operator')
+        for i, val in enumerate(vals):
+            if not isinstance(val, int):
+                raise template.TemplateSyntaxError(f'Error: Argument {i} value isn\'t int in number inequality operator. ' + \
+                    f'argument value: {val}, ' + f'argument expression: {args[i]}')
 
-        return self.eval_initial_from_value(lhs_val, rhs_val)
+        return self.eval_initial_from_values(vals)
+
+class GreaterOrEqualOperator(NumberInequalityOperator):
+    def eval_initial_from_two_values(self, lhs_val: ReactValType, rhs_val: ReactValType) -> bool:
+        return lhs_val >= rhs_val
+
+    def eval_js_from_two_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
+        return f'{lhs_js}>={rhs_js}'
+
+ReactiveBinaryOperator.operators['>='] = GreaterOrEqualOperator()
+
+class LessOrEqualOperator(NumberInequalityOperator):
+    def eval_initial_from_two_values(self, lhs_val: ReactValType, rhs_val: ReactValType) -> bool:
+        return lhs_val <= rhs_val
+
+    def eval_js_from_two_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
+        return f'{lhs_js}<={rhs_js}'
+
+ReactiveBinaryOperator.operators['<='] = LessOrEqualOperator()
+
+# Notice that >= and <= must be registered before > and <, for best matching
 
 class GreaterOperator(NumberInequalityOperator):
-    def eval_initial_from_value(self, lhs_val: ReactValType, rhs_val: ReactValType) -> bool:
+    def eval_initial_from_two_values(self, lhs_val: int, rhs_val: int) -> bool:
         return lhs_val > rhs_val
 
-    def eval_js_from_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
+    def eval_js_from_two_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
         return f'{lhs_js}>{rhs_js}'
 
 ReactiveBinaryOperator.operators['>'] = GreaterOperator()
@@ -128,27 +174,9 @@ class LessOperator(NumberInequalityOperator):
     def eval_initial_from_value(self, lhs_val: ReactValType, rhs_val: ReactValType) -> bool:
         return lhs_val < rhs_val
 
-    def eval_js_from_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
+    def eval_js_from_two_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
         return f'{lhs_js}<{rhs_js}'
 
 ReactiveBinaryOperator.operators['<'] = LessOperator()
-
-class GreaterOrEqualOperator(NumberInequalityOperator):
-    def eval_initial_from_value(self, lhs_val: ReactValType, rhs_val: ReactValType) -> bool:
-        return lhs_val >= rhs_val
-
-    def eval_js_from_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
-        return f'{lhs_js}>={rhs_js}'
-
-ReactiveBinaryOperator.operators['>='] = GreaterOrEqualOperator()
-
-class LessOrEqualOperator(NumberInequalityOperator):
-    def eval_initial_from_value(self, lhs_val: ReactValType, rhs_val: ReactValType) -> bool:
-        return lhs_val <= rhs_val
-
-    def eval_js_from_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
-        return f'{lhs_js}<={rhs_js}'
-
-ReactiveBinaryOperator.operators['<='] = LessOrEqualOperator()
 
 from .expressions import *
