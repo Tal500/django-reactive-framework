@@ -821,8 +821,9 @@ class EscapingContainerExpression(Expression):
     def reduce(self, template_context: template.Context):
         return EscapingContainerExpression(self.inner_expression.reduce(template_context), self.delimiter)
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
-        return self.inner_expression.eval_initial(react_context).translate(str.maketrans({self.delimiter: '\\' + self.delimiter}))
+    def eval_initial(self, react_context: Optional[ReactContext]) -> str:
+        return str(self.inner_expression.eval_initial(react_context)) \
+            .translate(str.maketrans({self.delimiter: '\\' + self.delimiter}))
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         inner_js_expression, hooks = self.inner_expression.eval_js_and_hooks(react_context)
