@@ -693,17 +693,66 @@ class BinaryOperatorExpression(Expression):
     def __str__(self) -> str:
         return self.operator_symbol.join(str(arg) for arg in self.args)
     
+    @property
+    def constant(self) -> bool:
+        for arg in self.args:
+            if not arg.constant:
+                return False
+        # otherwise
+
+        return True
+    
     def reduce(self, template_context: template.Context):
         args_reduced = [arg.reduce(template_context) for arg in self.args]
         return BinaryOperatorExpression(self.operator_symbol, self.operator, args_reduced)
 
     def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
         return self.operator.eval_initial(react_context, self.args)
+    
+    def optimized_args(self):
+        # Optimize it to what is needed
+
+        def calc_args_initial_expression(args: List[Expression]) -> Expression:
+            if len(args) is 0:
+                raise Exception('Internal reactive error: Locally optimized args for binary expression is 0')
+            elif len(args) is 1:
+                return args[0]
+            else:
+                return value_to_expression(self.operator.eval_initial(None, args))
+
+        optimized_arg_list = []
+        current_args = []
+        
+        for arg in self.args:
+            if arg.constant:
+                current_args.append(arg)
+            else:
+                if current_args:
+                    optimized_arg_list.append(calc_args_initial_expression(current_args))
+                    current_args = []
+                
+                optimized_arg_list.append(arg)
+        
+        # Add the last part (if any)
+        if current_args:
+            optimized_arg_list.append(calc_args_initial_expression(current_args))
+        
+        return optimized_arg_list
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
-        js_expression = self.operator.eval_js(react_context, self.args, delimiter)
+        optimized_args = self.optimized_args()
 
-        all_hooks = list(chain.from_iterable(arg.eval_js_and_hooks(react_context)[1] for arg in self.args))
+        if len(optimized_args) is 0:
+            raise Exception('Internal reactive error: Optimized args for binary expression is 0')
+        elif len(optimized_args) is 1:
+            return optimized_args[0].eval_js(react_context, delimiter)
+        # otherwise
+
+        print(len(optimized_args))
+
+        js_expression = self.operator.eval_js(react_context, optimized_args, delimiter)
+
+        all_hooks = list(chain.from_iterable(arg.eval_js_and_hooks(react_context)[1] for arg in optimized_args))
         
         return js_expression, all_hooks
     
