@@ -181,72 +181,6 @@ class NoneExpression(Expression):
         else:
             return None
 
-class SumExpression(Expression):
-    def __init__(self, expression_list: List[Expression]):
-        self.elements_expression = expression_list
-    
-    def __str__(self) -> str:
-        return '+'.join(str(expression) for expression in self.elements_expression)
-    
-    @property
-    def constant(self) -> bool:
-        for element in self.elements_expression:
-            if not element.constant:
-                return False
-        # otherwise
-
-        return True
-    
-    def reduce(self, template_context: template.Context) -> 'SumExpression':
-        expression_list = [expression.reduce(template_context) for expression in self.elements_expression]
-
-        return SumExpression(expression_list)
-    
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
-        return manual_non_empty_sum(expression.eval_initial(react_context) for expression in self.elements_expression)
-    
-    def optimize(self):
-        # Optimize it to what is needed
-        optimized_expression_list = []
-        current_summend = []
-        for expression in self.elements_expression:
-            if expression.constant:
-                current_summend.append(expression)
-            else:
-                if current_summend:
-                    optimized_expression_list.append(value_to_expression(SumExpression(current_summend).eval_initial(None)))
-                    current_summend = []
-                
-                optimized_expression_list.append(expression)
-        
-        # Add the last part (if any)
-        if current_summend:
-            optimized_expression_list.append(value_to_expression(SumExpression(current_summend).eval_initial(None)))
-        
-        return SumExpression(optimized_expression_list)
-
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
-        optimized = self.optimize()
-
-        js_expressions, all_hooks = [], []
-
-        for expression in optimized.elements_expression:
-            js_expression, hooks = expression.eval_js_and_hooks(react_context, delimiter)
-
-            js_expressions.append(js_expression)
-            all_hooks.extend(hooks)
-
-        return f"({'+'.join(js_expressions)})", all_hooks
-    
-    @staticmethod
-    def try_parse(expression: str) -> Optional['SumExpression']:
-        parts = list(smart_split(expression, ['+'], common_delimiters, skip_blank=False))
-
-        if len(parts) > 1:
-            return SumExpression([parse_expression(part) for part in parts])
-        else:
-            return None
-
 class ArrayExpression(Expression):
     def __init__(self, elements_expression: List[Expression]):
         self.elements_expression: List[Expression] = elements_expression
@@ -745,10 +679,8 @@ class BinaryOperatorExpression(Expression):
         if len(optimized_args) is 0:
             raise Exception('Internal reactive error: Optimized args for binary expression is 0')
         elif len(optimized_args) is 1:
-            return optimized_args[0].eval_js(react_context, delimiter)
+            return optimized_args[0].eval_js_and_hooks(react_context, delimiter)
         # otherwise
-
-        print(len(optimized_args))
 
         js_expression = self.operator.eval_js(react_context, optimized_args, delimiter)
 
@@ -780,6 +712,18 @@ class BinaryOperatorExpression(Expression):
         args = [parse_expression(arg) for arg in arg_strings]
 
         return BinaryOperatorExpression(symbol, operator, args)
+
+# An alias for BinaryOperatorExpression with operator SumOperator
+class SumExpression(BinaryOperatorExpression):
+    def __init__(self, args: List[Expression]):
+        super().__init__('+', ReactiveBinaryOperator.operators['+'], args)
+    
+    @staticmethod
+    def sum_expressions(args: List[Expression]) -> Expression:
+        if len(args) == 1:
+            return args[0]
+        else:
+            return SumExpression(args)
 
 # This expression type is used only internally, and the user can't create it manually.
 class NewReactDataExpression(Expression):
@@ -854,8 +798,6 @@ def parse_expression(expression: str):
     elif exp := IntExpression.try_parse(expression):
         return exp
     elif exp := NoneExpression.try_parse(expression):
-        return exp
-    elif exp := SumExpression.try_parse(expression):
         return exp
     elif exp := ArrayExpression.try_parse(expression):
         return exp

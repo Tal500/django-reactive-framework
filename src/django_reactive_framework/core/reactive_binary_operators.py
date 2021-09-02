@@ -2,6 +2,7 @@ from abc import abstractmethod
 from typing import Dict, List
 
 from .base import ReactContext, ReactValType
+from .utils import manual_non_empty_sum
 
 class ReactiveBinaryOperator:
     operators: Dict[str, 'ReactiveBinaryOperator'] = dict()
@@ -178,5 +179,14 @@ class LessOperator(NumberInequalityOperator):
         return f'{lhs_js}<{rhs_js}'
 
 ReactiveBinaryOperator.operators['<'] = LessOperator()
+
+class SumOperator(ReactiveBinaryOperator):
+    def eval_initial_from_values(self, vals: List[ReactValType]) -> ReactValType:
+        return manual_non_empty_sum(vals)
+
+    def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
+        return '+'.join(js_expressions)
+
+ReactiveBinaryOperator.operators['+'] = SumOperator()
 
 from .expressions import *

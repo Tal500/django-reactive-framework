@@ -178,11 +178,12 @@ class ReactTagNode(ReactNode):
                 if cond_expression is None:
                     return set_attr_part
                 else:
-                    return (TernaryOperatorExpression(cond_expression, SumExpression(set_attr_part), StringExpression('')), )
+                    return (TernaryOperatorExpression(cond_expression,
+                        SumExpression.sum_expressions(set_attr_part), StringExpression('')), )
 
             exp_iter = (attribute_expression_part(key, expressions) for key, expressions in computed_attributes.items())
 
-            return SumExpression(list(itertools.chain.from_iterable(exp_iter)))
+            return SumExpression.sum_expressions(list(itertools.chain.from_iterable(exp_iter)))
         
         def make_control_var(self) -> ReactVar:
             control_var = ReactVar(self.control_var_name, value_to_expression({}))
