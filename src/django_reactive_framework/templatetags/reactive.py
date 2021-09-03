@@ -10,7 +10,7 @@ from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
-from ..core.expressions import EscapingContainerExpression, Expression, FunctionCallExpression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, TernaryOperatorExpression, VariableExpression, parse_expression
+from ..core.expressions import BoolExpression, EscapingContainerExpression, Expression, FunctionCallExpression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, TernaryOperatorExpression, VariableExpression, parse_expression
 from ..core.reactive_function import CustomReactiveFunction
 
 from ..core.utils import reduce_nodelist, remove_whitespaces_on_boundaries, split_kwargs, str_repr_s, smart_split, common_delimiters, dq, whitespaces
@@ -966,74 +966,144 @@ def do_reactfor(parser: template.base.Parser, token: template.base.Token):
     return ReactForNode(nodelist, var_name, parse_expression(iter_expression),
         key_expression=(parse_expression(key_expression) if key_expression is not None else None))
 
+class ReactClauseNode(ReactNode):
+    tag_name = 'clause'
+    
+    class Context(ReactRerenderableContext):
+        def __init__(self, id: str, parent: ReactContext,
+            condition: Expression):
+            self.condition = condition
+
+            super().__init__(id=id, parent=parent, fully_reactive=True)
+    
+        def var_js(self, var):
+            return f'{var.name}_clause{self.id}'
+        
+        def is_condition_met_initial(self) -> bool:
+            return self.condition.eval_initial(self)
+        
+        def render_html(self, subtree: Optional[List]) -> str:
+            return self.render_html_inside(subtree)
+        
+        def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
+            return self.render_js_and_hooks_inside(subtree)
+
+        def render_js_conditional_or_else(self, subtree: List,
+            else_js: str, else_hooks: Iterable[ReactHook]) -> Tuple[str, Iterable[ReactHook]]:
+
+            inner_js, inner_hooks = self.render_js_and_hooks(subtree)
+
+            if self.condition.constant:
+                if self.condition.eval_initial(self):
+                    return inner_js, inner_hooks
+                else:
+                    return else_js, else_hooks
+            else:
+                condition_js, condition_hooks = self.condition.eval_js_and_hooks(self)
+                return f'(({condition_js})?({inner_js}):({else_js}))', chain(condition_hooks, inner_hooks, else_hooks)
+
+    def __init__(self, nodelist: template.NodeList, condition: Expression):
+        self.condition = condition
+        super().__init__(nodelist=nodelist)
+
+    def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
+        condition: Expression = self.condition.reduce(template_context)
+
+        id = f'clause_{next_id_by_context(template_context, "__react_clause")}'
+
+        return ReactClauseNode.Context(id=id, parent=parent_context, condition=condition)
+
 class ReactIfNode(ReactNode):
     tag_name = 'if'
 
     class Context(ReactRerenderableContext):
-        def __init__(self, id: str, parent: ReactContext, expression: Expression):
-            self.expression: Expression = expression
+        def __init__(self, id: str, parent: ReactContext):
             super().__init__(id=id, parent=parent, fully_reactive=True)
     
         def var_js(self, var):
             return f'{var.name}_if{self.id}'
 
         def render_html(self, subtree: List) -> str:
-            condition_val_initial = self.expression.eval_initial(self)
+            matcheced_clause_context: Optional[ReactClauseNode.Context] = None
+            matcheced_clause_subtree = None
 
-            if condition_val_initial:
-                return self.render_html_inside(subtree)
-            else:
+            for element in subtree:
+                context, subsubtree = element
+                if context.is_condition_met_initial():
+                    matcheced_clause_context = context
+                    matcheced_clause_subtree = subsubtree
+                    break
+            # otherwise
+
+            if matcheced_clause_context is None:
                 return ''
+            else:
+                return matcheced_clause_context.render_html(matcheced_clause_subtree)
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
-            val_js, condition_hooks = self.expression.eval_js_and_hooks(self)
+            else_js, else_hooks = '\'\'', []
 
-            js_section_expression, hooks_inside = self.render_js_and_hooks_inside(subtree)
-
-            hooks = chain(condition_hooks, hooks_inside)
-
-            if js_section_expression and condition_hooks:
-                js_rerender_expression = f'({val_js}?{js_section_expression}:\'\')'
-            elif js_section_expression:
-                condition_val_initial = self.expression.eval_initial(self)
-                if condition_val_initial:
-                    js_rerender_expression = js_section_expression
-                else:
-                    js_rerender_expression = None
-            else:
-                js_rerender_expression = None
+            for element in reversed(subtree):
+                context, subsubtree = element
+                context: ReactClauseNode.Context = context
+                else_js, else_hooks = context.render_js_conditional_or_else(subsubtree, else_js, else_hooks)
             
-            return js_rerender_expression, hooks
+            return else_js, else_hooks
 
-    def __init__(self, nodelist: template.NodeList, expression: Expression):
-        self.expression = expression
+    def __init__(self, nodelist: template.NodeList):
         super().__init__(nodelist=nodelist)
 
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
-        expression: Expression = self.expression.reduce(template_context)
-
         id = f'if_{next_id_by_context(template_context, "__react_if")}'
 
-        return ReactIfNode.Context(id=id, parent=parent_context, expression=expression)
+        return ReactIfNode.Context(id=id, parent=parent_context)
+
+def parse_if_clause(content: str, nodelist: template.NodeList) -> ReactClauseNode:
+    bits = list(smart_split(content, whitespaces, common_delimiters))
+
+    if bits[0] == ':else':
+        if len(bits) != 1:
+            raise template.TemplateSyntaxError('Reactive else tag cannot have arguments!')
+        # otherwise
+
+        return ReactClauseNode(nodelist, BoolExpression(True))
+    elif bits[0] in ('#if', ':elif'):
+        if len(bits) != 2:
+            raise template.TemplateSyntaxError('Reactive if/elif tag must have exactly one argument!')
+        # otherwise
+
+        return ReactClauseNode(nodelist, parse_expression(bits[1]))
+    else:
+        raise template.TemplateSyntaxError('Cannot parse continuation tag of if. ' + \
+            f'Must be :elif or :else, but got {bits[0]}')
 
 @register.tag('#' + ReactIfNode.tag_name)
 def do_reactif(parser: template.base.Parser, token: template.base.Token):
     # TODO: add support for else and elif in the future
+    
+    nodelist = parser.parse((':elif', ':else', '/if'))
+    clauses = [parse_if_clause(token.contents, nodelist)]
+    token = parser.next_token()
 
-    bits = list(smart_split(token.contents, whitespaces, common_delimiters))
+    # {% :elif ... %} (repeatable)
+    while token.contents.startswith(':elif'):
+        nodelist = parser.parse((':elif', ':else', '/if'))
+        clause = parse_if_clause(token.contents, nodelist)
+        clauses.append(clause)
+        token = parser.next_token()
 
-    if len(bits) != 2:
-        raise template.TemplateSyntaxError(
-            "%r tag requires exactly two arguments" % token.contents.split()[0]
-        )
-    # otherwise
+    # {% :else %} (optional)
+    if token.contents == ':else':
+        nodelist = parser.parse(('/if',))
+        clause = parse_if_clause(token.contents, nodelist)
+        clauses.append(clause)
+        token = parser.next_token()
+    
+    # {% endif %}
+    if token.contents != '/if':
+        raise template.TemplateSyntaxError('Malformed template tag at line {}: "{}"'.format(token.lineno, token.contents))
 
-    expression = bits[1]
-
-    nodelist = parser.parse(('/' + ReactIfNode.tag_name,))
-    parser.delete_first_token()
-
-    return ReactIfNode(nodelist, parse_expression(expression))
+    return ReactIfNode(nodelist=template.NodeList(clauses))
 
 class ReactPrintNode(ReactNode):
     tag_name = 'print'
