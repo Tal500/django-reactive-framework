@@ -27,7 +27,7 @@ You can start see an example by two methods:
 * Starting the example server:
     1. Open the command line, cd to example dir, and execute the following:
         python manage.py runserver
-    2. Open your browser and brose to:
+    2. Open your browser and browse to:
         http://127.0.0.1:8000/
 * Import the example urls to your server (listed in src/django_reactive_framework/urls.py):
     1. Add the following patterns to yout urls.py:
