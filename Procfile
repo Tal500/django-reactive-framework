@@ -1,1 +1,1 @@
-web: python example/manage.py runserver
+web: cd example && gunicorn example.wsgi --log-file -
