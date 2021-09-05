@@ -7,6 +7,11 @@ This project is licensed under the MIT License.
 
 This project is experimental and under development.
 
+# Notice
+Please ignore the following files, they are only for Heroku server deployment:
+    Procfile
+    requirements.txt
+
 # Installation
 You can install this package by two ways:
 
@@ -22,11 +27,11 @@ Kepp in mind that this package is still under development.
 
 # Example
 
-You can start see an example by two methods:
+You can start see an example by either one of these two methods:
 
 * Starting the example server:
-    1. Open the command line, cd to example dir, and execute the following:
-        python manage.py runserver
+    1. Open the command line in the root directory and execute the following:
+        python example/manage.py runserver
     2. Open your browser and browse to:
         http://127.0.0.1:8000/
 * Import the example urls to your server (listed in src/django_reactive_framework/urls.py):
