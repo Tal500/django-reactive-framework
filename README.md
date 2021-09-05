@@ -8,7 +8,7 @@ This project is licensed under the MIT License.
 This project is experimental and under development.
 
 # Notice
-Please ignore the following files, they are only for Heroku server deployment:
+Please ignore the following files, they are only for Heroku live example server deployment:
     Procfile
     requirements.txt
 
@@ -27,8 +27,10 @@ Kepp in mind that this package is still under development.
 
 # Example
 
-You can start see an example by either one of these two methods:
+You can start see an example by either one of these three methods:
 
+* (Recomended) The live example in Heroko (might take time to wake up):
+https://django-reactive-example.herokuapp.com
 * Starting the example server:
     1. Open the command line in the root directory and execute the following:
         python example/manage.py runserver
