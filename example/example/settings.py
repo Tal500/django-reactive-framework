@@ -29,6 +29,8 @@ SECRET_KEY = 'not-a-secret-because-it-is-only-an-example'
 DEBUG = True
 
 ALLOWED_HOSTS = []
+if http_host := os.environ.get('HTTP_HOST'):# This is for heroku hosting
+    ALLOWED_HOSTS.append(http_host)
 
 
 # Application definition
