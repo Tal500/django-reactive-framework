@@ -7,11 +7,6 @@ This project is licensed under the MIT License.
 
 This project is experimental and under development.
 
-# Notice
-Please ignore the following files, they are only for Heroku live example server deployment:
-    Procfile
-    requirements.txt
-
 # Installation
 You can install this package by two ways:
 
@@ -34,6 +29,9 @@ https://django-reactive-example.herokuapp.com
 * Starting the example server:
     1. Open the command line in the root directory and execute the following:
         python example/manage.py runserver
+    You may ignore the following migration warning, since we don't use database at all:
+        You have 18 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): admin, auth, contenttypes, sessions.
+        Run 'python manage.py migrate' to apply them.
     2. Open your browser and browse to:
         http://127.0.0.1:8000/
 * Import the example urls to your server (listed in src/django_reactive_framework/urls.py):
