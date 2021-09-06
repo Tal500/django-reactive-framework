@@ -35,7 +35,7 @@ https://django-reactive-example.herokuapp.com
 
             python example/manage.py runserver
 
-    You may ignore the following migration warning, since we don't use database at all:
+        You may ignore the following migration warning, since we don't use database at all:
 
             You have 18 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): admin, auth, contenttypes, sessions.
             Run 'python manage.py migrate' to apply them.
