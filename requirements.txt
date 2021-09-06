@@ -1,2 +1,2 @@
 Django>=3.1
-gunicorn#For Heroku only
+gunicorn # For Heroku only
