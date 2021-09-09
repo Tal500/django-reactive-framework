@@ -108,12 +108,19 @@ class ReactDefNode(ReactNode):
 @register.tag('#/' + ReactDefNode.tag_name)
 def do_reactdef(parser: template.base.Parser, token: template.base.Token):
     # TODO: Make the difference between bounded and unbounded expressions(i.e. if reactivity change them).
-    try:
-        tag_name, var_name, var_val_expression = tuple(smart_split(token.contents, whitespaces, common_delimiters))
-    except ValueError:
+
+    bits = tuple(smart_split(token.contents, whitespaces, common_delimiters))
+    bits_after = bits[1:]
+
+    var_def = tuple(split_kwargs(bits_after))
+
+    if len(var_def) != 1 or (var_def[0][1] is None):
         raise template.TemplateSyntaxError(
-            "%r tag requires exactly two arguments" % token.contents.split()[0]
+            "%r tag requires exactly one aurgument in the form of {name}={val}" % token.contents.split()[0]
         )
+    # otherwise
+
+    var_name, var_val_expression = var_def[0]
 
     return ReactDefNode(var_name, parse_expression(var_val_expression))
 
