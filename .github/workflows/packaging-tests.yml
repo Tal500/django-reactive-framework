@@ -20,6 +20,9 @@ jobs:
     - name: Update Pip
       run: |
         python -m pip install --upgrade pip
+    - name: Install Build Package
+      run: |
+        pip install --upgrade build
     - name: Install Dependencies
       run: |
         pip install -r src/django_reactive_framework/requirements.txt
