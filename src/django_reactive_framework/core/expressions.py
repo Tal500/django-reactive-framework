@@ -648,9 +648,9 @@ class BinaryOperatorExpression(Expression):
         # Optimize it to what is needed
 
         def calc_args_initial_expression(args: List[Expression]) -> Expression:
-            if len(args) is 0:
+            if len(args) == 0:
                 raise Exception('Internal reactive error: Locally optimized args for binary expression is 0')
-            elif len(args) is 1:
+            elif len(args) == 1:
                 return args[0]
             else:
                 return value_to_expression(self.operator.eval_initial(None, args))
@@ -677,9 +677,9 @@ class BinaryOperatorExpression(Expression):
     def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         optimized_args = self.optimized_args()
 
-        if len(optimized_args) is 0:
+        if len(optimized_args) == 0:
             raise Exception('Internal reactive error: Optimized args for binary expression is 0')
-        elif len(optimized_args) is 1:
+        elif len(optimized_args) == 1:
             return optimized_args[0].eval_js_and_hooks(react_context, delimiter)
         # otherwise
 
