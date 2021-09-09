@@ -17,7 +17,7 @@ You can install this package by two ways:
 
 * The easy way - Type the following to a command line:
 
-        pip install --upgrade git+git://github.com/Tal500/django-reactive-framework.git
+        pip install --upgrade https://github.com/Tal500/django-reactive-framework/archive/master.zip
 
 * The deep way (for internal development):
     1. Clone the package:
