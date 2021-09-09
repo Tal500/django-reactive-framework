@@ -7,6 +7,11 @@ This project is licensed under the MIT License.
 
 This project is experimental and under development.
 
+# Requirements
+This package requires:
+* Python>=3.8 (tested in 3.8, 3.9 & 3.10.0-rc.2)
+* Django>=3.1 (tested in 3.1, 3.2 & 3.2.7)
+
 # Installation
 You can install this package by two ways:
 
