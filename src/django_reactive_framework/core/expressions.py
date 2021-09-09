@@ -404,7 +404,7 @@ class PropertyExpression(Expression):
             if key in current:
                 current = current[key]
             else:
-                raise template.TemplateSyntaxError(f"Error while parsing expression {self}: " +\
+                raise template.TemplateSyntaxError(f"Error while evaluating expression initial value of {self}: " +\
                     "There is no key named {key} in {current}")
         
         return current
