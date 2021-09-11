@@ -784,7 +784,7 @@ class NewReactDataExpression(Expression):
     
     def __str__(self):
         return f'ReactData(name={self.data.get_name()},expression={self.data.expression}' + \
-            (f',tracked_initial={self.data.tracked_initial}' if hasattr(self.data, 'tracked_initial') else '') + \
+            (f',saved_initial={self.data.saved_initial}' if hasattr(self.data, 'saved_initial') else '') + \
             ')'
     
     def reduce(self, template_context: template.Context):
