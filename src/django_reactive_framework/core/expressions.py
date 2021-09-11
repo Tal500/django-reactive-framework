@@ -405,7 +405,7 @@ class PropertyExpression(Expression):
                 current = current[key]
             else:
                 raise template.TemplateSyntaxError(f"Error while evaluating expression initial value of {self}: " +\
-                    f"There is no key named '{key}' in '{current}'." + \
+                    f"There is no key named '{key}' in {{{current}}}. " + \
                     f"Root expression: {{{self.root_expression}}} val: {{{root_val}}}.")
         
         return current
