@@ -1086,8 +1086,6 @@ def parse_if_clause(content: str, nodelist: template.NodeList) -> ReactClauseNod
 
 @register.tag('#' + ReactIfNode.tag_name)
 def do_reactif(parser: template.base.Parser, token: template.base.Token):
-    # TODO: add support for else and elif in the future
-    
     nodelist = parser.parse((':elif', ':else', '/if'))
     clauses = [parse_if_clause(token.contents, nodelist)]
     token = parser.next_token()
