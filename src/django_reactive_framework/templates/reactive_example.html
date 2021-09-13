@@ -142,13 +142,19 @@ Even None is supported:
 
 {% #/def number=3 %}
 {% #/def greeting='Hi' %}
+{% #/def sum_result=2+number %}
 
 {% #tag p %}
 You may also use plus operator:<br />
-{% #/def sum_result=2+number %}
 2+{% #/print number %}={% #/print sum_result %}<br />
 "{% #/print greeting %}"+" "+"World"={% #/print greeting+" "+"World" %}
 {% /tag %}
+
+{% #tag p %}
+Using the function present(), we can print the values without trigerring rerendering:<br />
+The original equation was: 2+{% #/print present(number) %}={% #/print present(sum_result) %}<br />
+{% /tag %}
+
 <script>
 setTimeout(
     function() {
