@@ -1028,20 +1028,22 @@ class ReactIfNode(ReactNode):
 
         def render_html(self, subtree: List) -> str:
             matcheced_clause_context: Optional[ReactClauseNode.Context] = None
-            matcheced_clause_subtree = None
 
-            for element in subtree:
+            # It's important to render everyone, so they can register their variables. (TODO: Find a better way)
+            html_outputs = [context.render_html(subsubtree) for context, subsubtree in subtree]
+
+            for i, element in enumerate(subtree):
                 context, subsubtree = element
                 if context.is_condition_met_initial():
                     matcheced_clause_context = context
-                    matcheced_clause_subtree = subsubtree
+                    matcheced_html_output = html_outputs[i]
                     break
             # otherwise
 
             if matcheced_clause_context is None:
                 return ''
             else:
-                return matcheced_clause_context.render_html(matcheced_clause_subtree)
+                return matcheced_html_output
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             else_js, else_hooks = '\'\'', []
