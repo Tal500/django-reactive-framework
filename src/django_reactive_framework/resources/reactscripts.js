@@ -15,14 +15,12 @@ function __reactive_dll_push(self, val) {
 
 function __reactive_remove_node(self, node) {
     if (node.prev === null) {
-        if (self.head === node)// Must verify it since we might clear all earlier (it's legal)
-            self.head = node.next;
+        self.head = node.next;
     } else
         node.prev.next = node.next;
     
     if (node.next === null) {
-        if (self.tail === node)// Must verify it since we might clear all earlier (it's legal)
-            self.tail = node.prev;
+        self.tail = node.prev;
     } else
         node.next.prev = node.prev;
 }
