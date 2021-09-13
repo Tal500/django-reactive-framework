@@ -1243,8 +1243,6 @@ class ReactSetNode(ReactNode):
                 hooks = []
             else:
                 js_expression, hooks = self.val_expression.eval_js_and_hooks(self)
-            
-            print('js_expression', js_expression)
 
             output = self.settable_expression.js_set(self, js_expression, hooks)
 
