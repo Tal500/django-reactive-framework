@@ -145,7 +145,8 @@ Even None is supported:
 
 {% #tag p %}
 You may also use plus operator:<br />
-2+{% #/print number %}={% #/print 2+number %}<br />
+{% #/def sum_result=2+number %}
+2+{% #/print number %}={% #/print sum_result %}<br />
 "{% #/print greeting %}"+" "+"World"={% #/print greeting+" "+"World" %}
 {% /tag %}
 <script>
