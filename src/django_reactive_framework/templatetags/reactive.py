@@ -71,7 +71,6 @@ reactcontent_node_str = 'reactcontent_node'
 class ReactDefNode(ReactNode):
     tag_name = 'def'
 
-    # TODO: Support reactive definition (i.e. update value when expression value is changed)
     class Context(ReactRerenderableContext):
         def __init__(self, parent, var_name: str, var_val_expression: Expression):
             self.var_name: str = var_name
@@ -88,7 +87,7 @@ class ReactDefNode(ReactNode):
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             self.act()
-            return '', []# TODO: Return a hook for all hooks in the expression?
+            return '', []
         
         def render_script(self, subtree: Optional[List]) -> ResorceScript:
             self.act()
@@ -107,8 +106,6 @@ class ReactDefNode(ReactNode):
 
 @register.tag('#/' + ReactDefNode.tag_name)
 def do_reactdef(parser: template.base.Parser, token: template.base.Token):
-    # TODO: Make the difference between bounded and unbounded expressions(i.e. if reactivity change them).
-
     bits = tuple(smart_split(token.contents, whitespaces, common_delimiters))
     bits_after = bits[1:]
 
@@ -664,11 +661,14 @@ class ReactForNode(ReactNode):
 
                 vars = super().vars_needed_decleration()
 
-                iter_data: Dict[str, ReactValType] = {('var_' + var.js()): var for var in vars}
+                iter_data: Dict[str, ReactValType] = {'vars': {(var.js()): var for var in vars} }
 
                 iters.append(iter_data)
 
-                self.clear_render()
+                # It's important to save the local variables, so we don't clear on the last iteration
+                # TODO: Find a better solution for saving local variables
+                if i < len(iter_val_initial) - 1:
+                    self.clear_render()
             
             control_data = {'iters': iters}
             if self.key_expression:
@@ -684,7 +684,7 @@ class ReactForNode(ReactNode):
             other_js_expression: Optional[str] = None, iteration_expression: str = None):
 
             val = (iteration_expression if (iteration_expression is not None) else (control_var.js_get() + ".iters[i]")) + \
-                ".var_" + var.js() if (other_js_expression is None) else other_js_expression
+                ".vars." + var.js() if (other_js_expression is None) else other_js_expression
             return f'const {var.js()} = {val};'
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
@@ -761,17 +761,9 @@ class ReactForNode(ReactNode):
 
             defs = '\n'.join(self.get_def(control_var, var) for var in vars)
 
-            def get_set(var: ReactVar, other_js_expression: Optional[str] = None):
-                if other_js_expression is None and var.expression is None:
-                    return ''
-                # otherwise
-
-                return var.js_set(
-                    var.expression.eval_js_and_hooks(self)[0] if other_js_expression is None else other_js_expression,
-                    alt_js_name=f'{control_var.js_get()}.iters[i].var_{var.js()}')
-
-            def get_reactive_js(var: ReactVar, other_js_expression: Optional[str] = None):
-                return f'var_{var.js()}:' + (var.reactive_val_js(self) if other_js_expression is None else other_js_expression)
+            def get_reactive_js(var: ReactVar, other_js_expression: Optional[str] = None, clear_hooks: bool = False):
+                return f'{var.js()}:' + \
+                    (var.reactive_val_js(self, clear_hooks=clear_hooks) if other_js_expression is None else other_js_expression)
 
             if self.key_expression:
                 defs_but_iter_and_id_keyed = '\n'.join(
@@ -813,13 +805,13 @@ class ReactForNode(ReactNode):
                     '}\n' + \
                 '} else {\n' + \
                     self.get_def(control_var, iter_var, iteration_expression='__reactive_old_iters[0]') + '\n' + \
-                    f'const {iter_id_var.js()} = {iter_id_var.reactive_val_js(self)};\n' + \
+                    f'const {iter_id_var.js()} = {iter_id_var.reactive_val_js(self, clear_hooks=True)};\n' + \
                     f'current_old_element = document.getElementById({tag_id_js});\n' + \
                 '}\n' + \
                 'if (__reactive_need_work) {\n' + \
                 'for (var i = 0; i < react_iter.length; ++i) {\n' + \
                     f'const {iter_var.js()} = {iter_var.reactive_val_js(self, "react_iter[i]")};\n' + \
-                    f'const {iter_id_var.js()} = {iter_id_var.reactive_val_js(self)};\n' + \
+                    f'const {iter_id_var.js()} = {iter_id_var.reactive_val_js(self, clear_hooks=True)};\n' + \
                     f'var __reactive_iter_store = {control_var.js_get()}.key_table[{iter_id_var.js_get()}];\n' + \
                     'if (__reactive_iter_store) {\n' + \
                         f'const current_element = document.getElementById({tag_id_js});\n' + \
@@ -832,12 +824,12 @@ class ReactForNode(ReactNode):
                         'current_old_element = current_element.nextSibling;\n' + \
                         '}\n' + \
                         '__reactive_iter_store.keep = true;\n' + \
-                        iter_var.js_set(iter_var.js_get(), f'__reactive_iter_store.var_{iter_var.js()}') + '\n' + \
+                        iter_var.js_set(iter_var.js_get(), f'__reactive_iter_store.vars.{iter_var.js()}') + '\n' + \
                     '} else {\n' + \
-                        '__reactive_iter_store = {' + \
+                        '__reactive_iter_store = { vars: {' + \
                         ','.join(chain((get_reactive_js(iter_var, iter_var.js()),), \
                             (get_reactive_js(var) for var in vars_but_iter))) + \
-                        '};\n' + \
+                        '} };\n' + \
                         f'{control_var.js_get()}.key_table[{iter_id_var.js_get()}] = __reactive_iter_store;\n' + \
                         defs_but_iter_and_id_keyed + '\n' + \
                         script.initial_pre_calc + '\n' + \
@@ -862,6 +854,7 @@ class ReactForNode(ReactNode):
                         f'const element = document.getElementById({tag_id_js});\n' + \
                         'element.parentNode.removeChild(element);\n' + \
                         f'delete {control_var.js_get()}.key_table[{iter_id_var.js_get()}];\n' + \
+                        '\n'.join(f'__reactive_data_destroy({var.js()});' for var in reversed(vars)) + '\n' + \
                     '}\n' + \
                 '}\n' + \
                 '}\n'
@@ -871,16 +864,16 @@ class ReactForNode(ReactNode):
                 f'const react_iter = {iter_val_js};\n' + \
                 f'const length_changed = ({control_var.js_get()}.iters.length !== react_iter.length);\n' + \
                 f'if (length_changed) {{\n' + \
-                f'{control_var.js_get()}.iters = [];\n' + \
+                    f'{control_var.js_get()}.iters = [];\n' + \
                 '}\n' + \
                 'for (var i = 0; i < react_iter.length; ++i) {\n' + \
                     f'const {iter_var.js()} = {iter_var.reactive_val_js(self, "react_iter[i]")};\n' + \
                     '\n'.join((f'const {var.js()} = {var.reactive_val_js(self)};' for var in vars_but_iter)) + '\n' + \
                     f'if (length_changed) {{\n' + \
-                    f'{control_var.js_get()}.iters.push({{' + \
-                    ','.join((f'var_{var.js()}:{var.js()}' for var in vars)) + \
-                    '} ); } else {\n' + \
-                    '\n'.join(get_set(var, var.js_get()) for var in vars) + '\n' \
+                    f'{control_var.js_get()}.iters.push({{ vars: {{\n' + \
+                    ','.join((f'{var.js()}:{var.js()}' for var in vars)) + \
+                    '\n} } ); } else {\n' + \
+                    '\n'.join(f'{control_var.js_get()}.iters[i].vars.{var.js()} = {var.js()};' for var in vars) + '\n' \
                     '}\n' + \
                     script.initial_pre_calc + '\n' \
                 '} } )();'
@@ -902,14 +895,17 @@ class ReactForNode(ReactNode):
                 if self.key_expression else '') + \
                 script.initial_post_calc + '} } )();'
             
-            script.destructor = '( () => {' + \
+            script.destructor = '( () => {\n' + \
                 f'// For loop destructor\n' + \
                 ('\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_{hook.get_name()}') \
                     for hook in iter_hooks)) + \
                 '\n' \
                 if self.key_expression else '') + \
                 f'for (var i = 0; i < {control_var.js_get()}.iters.length; ++i) {{\n' + \
-                '\n' + defs + '\n' + script.destructor + '} } )();'
+                    defs + '\n' + \
+                    script.destructor + '\n' + \
+                    '\n'.join(f'__reactive_data_destroy({var.js()});' for var in reversed(vars)) + '\n' + \
+                '} } )();'
 
             return script
 
@@ -1086,8 +1082,6 @@ def parse_if_clause(content: str, nodelist: template.NodeList) -> ReactClauseNod
 
 @register.tag('#' + ReactIfNode.tag_name)
 def do_reactif(parser: template.base.Parser, token: template.base.Token):
-    # TODO: add support for else and elif in the future
-    
     nodelist = parser.parse((':elif', ':else', '/if'))
     clauses = [parse_if_clause(token.contents, nodelist)]
     token = parser.next_token()
@@ -1161,35 +1155,7 @@ class ReactPrintNode(ReactNode):
             
             control_var, print_var = self.make_vars()
 
-            return VariableExpression(print_var.name).eval_js_html_output_and_hooks(self)[0], []
-
-        def render_script(self, subtree: Optional[List]) -> str:
-            # TODO: HTML escaping?
-            js_html_expression, hooks = self.expression.eval_js_html_output_and_hooks(self)
-            
-            control_var, print_var = self.make_vars()
-
-            script = ResorceScript()
-            
-            script.initial_post_calc = \
-                '{\n' + \
-                    'function proc() {\n' + \
-                        f'const has_changed = {print_var.js_set(js_html_expression)}\n' + \
-                        f'if (has_changed)\n' + \
-                            f'__reactive_reset_content();\n' + \
-                    '\n}\n' + \
-                    '\n'.join((f'{control_var.js_get()}.attachment_{hook.get_name()} = {hook.js_attach("proc", False)};' \
-                        for hook in hooks)) + '\n' + \
-                    'proc();\n' + \
-                '}\n'
-            
-            script.destructor = \
-                '{\n' + \
-                    '\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_{hook.get_name()}') \
-                        for hook in hooks)) + \
-                '\n}\n'
-            
-            return script
+            return VariableExpression(print_var.name).eval_js_html_output_and_hooks(self)[0], [print_var]
 
     def __init__(self, expression: Expression):
         self.expression = expression
@@ -1266,53 +1232,96 @@ class ReactSetNode(ReactNode):
     tag_name = 'set'
 
     class Context(ReactContext):
-        def __init__(self, parent, settable_expression: SettableExpression):
+        def __init__(self, parent, settable_expression: SettableExpression, val_expression: Optional[Expression]):
             self.settable_expression: SettableExpression = settable_expression
+            self.val_expression: Optional[Expression] = val_expression
             super().__init__(id='', parent=parent, fully_reactive=False)
 
         def render_html(self, subtree: List) -> str:
-            js_expression = self.render_html_inside(subtree)
+            if self.val_expression is None:
+                js_expression = self.render_html_inside(subtree)
+                hooks = []
+            else:
+                js_expression, hooks = self.val_expression.eval_js_and_hooks(self)
+            
+            print('js_expression', js_expression)
 
-            output = self.settable_expression.js_set(self, js_expression)
+            output = self.settable_expression.js_set(self, js_expression, hooks)
 
             return output# TODO: Shell we use "mark_safe" here?
 
-    def __init__(self, nodelist: template.NodeList, settable_expression: SettableExpression):
+    def __init__(self, nodelist: template.NodeList, settable_expression: SettableExpression, val_expression: Optional[Expression]):
         self.settable_expression = settable_expression
+        self.val_expression: Optional[Expression] = val_expression
         super().__init__(nodelist=nodelist)
 
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
-        settable_expression: Expression = self.settable_expression.reduce(template_context)
+        settable_expression: SettableExpression = self.settable_expression.reduce(template_context)
+        val_expression: Optional[Expression] = None if self.val_expression is None else \
+            self.val_expression.reduce(template_context)
 
-        return ReactSetNode.Context(parent_context, settable_expression)
+        return ReactSetNode.Context(parent_context, settable_expression, val_expression)
 
 @register.tag('#' + ReactSetNode.tag_name)
+@register.tag('#/' + ReactSetNode.tag_name)
 def do_reactset(parser: template.base.Parser, token: template.base.Token):
     """Set current present value to a js expression"""
 
-    # TODO: Make the difference between bounded and unbounded expressions. (Currently unbound)
-
     bits = list(smart_split(token.contents, whitespaces, common_delimiters))
 
-    if len(bits) != 2:
+    tag = token.contents.split()[0]
+
+    if len(bits) < 2:
         raise template.TemplateSyntaxError(
-            "%r tag requires at exactly two arguments" % token.contents.split()[0]
+            "%r tag requires exactly one aurgument." % tag
         )
     # otherwise
 
-    var_expression = bits[1]
+    self_enclosing = tag.startswith('#/')
+
+    remaining_bits = bits[1:]
+
+    parts = tuple(split_kwargs(remaining_bits))
+
+    if len(parts) != 1:
+        raise template.TemplateSyntaxError(
+            "%r tag (which is self enclosing) requires exactly one aurgument!" %
+                token.contents.split()[0]
+        )
     
-    nodelist: template.NodeList = parser.parse(('/' + ReactSetNode.tag_name,))
-    parser.delete_first_token()
+    settable_expression_str, val_expression_str = parts[0]
 
-    expression = parse_expression(var_expression)
+    if self_enclosing:
+        if val_expression_str is None:
+            raise template.TemplateSyntaxError(
+                "%r tag (which is self enclosing) requires exactly one aurgument in the form of {settable}={val}" %
+                    token.contents.split()[0]
+            )
+    else:
+        if val_expression_str is not None:
+            raise template.TemplateSyntaxError(
+                "%r tag (which isn't self enclosing) requires exactly one aurgument in the form of {settable}" %
+                    token.contents.split()[0]
+            )
+    # otherwise
 
-    if not isinstance(expression, SettableExpression):
+    #return ReactDefNode(var_name, parse_expression(val_expression_str))
+    
+    if self_enclosing:
+        nodelist = None
+    else:
+        nodelist = parser.parse(('/' + ReactSetNode.tag_name,))
+        parser.delete_first_token()
+
+    settable_expression = parse_expression(settable_expression_str)
+    val_expression = None if val_expression_str is None else parse_expression(val_expression_str)
+
+    if not isinstance(settable_expression, SettableExpression):
         raise template.TemplateSyntaxError(
             "%r tag requires the first expression to be reactively setable." % token.contents.split()[0]
         )
 
-    return ReactSetNode(nodelist, expression)
+    return ReactSetNode(nodelist, settable_expression, val_expression)
 
 class ReactNotifyNode(ReactNode):
     tag_name = 'notify'

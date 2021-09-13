@@ -67,32 +67,91 @@ class ReactData(ReactHook):
     def __init__(self, expression: 'Expression'):
         self.expression = expression
 
+    def __str__(self) -> str:
+        return f'ReactData(name={self.get_name()},expression={self.expression}' + \
+            (f', saved_initial={self.saved_initial}' if hasattr(self, 'saved_initial') else '') + \
+            ')'
+    
+    def __repr__(self) -> str:
+        return f'{super().__repr__()}({str(self)})'
+
     def get_name(self) -> str:
         return ''
     
-    def initial_val_js(self, react_context: 'ReactContext', other_expression: str = None, delimiter: str = sq):
-        var_val_expr = value_js_representation(self.expression.eval_initial(react_context), react_context, delimiter) \
-            if other_expression is None else other_expression
-        
-        return f'__reactive_data({var_val_expr})'
+    @staticmethod
+    def convert_hooks_to_js(hooks: Iterable[ReactHook]):
+        hooks = set(hooks)# Avoid repeated hooks
+
+        if len(hooks) > 0:
+            return f'[{",".join(hook.js() for hook in hooks)}]'
+        else:
+            return '__reactive_empty_array'
     
-    def reactive_val_js(self, react_context: 'ReactContext', other_expression: str = None, delimiter: str = sq):
-        var_val_expr = self.expression.eval_js_and_hooks(react_context, delimiter)[0] \
-            if other_expression is None else other_expression
+    def eval_initial(self, react_context: 'ReactContext'):
+        if hasattr(self, 'saved_initial'):
+            return self.saved_initial
+        else:
+            return self.expression.eval_initial(react_context)
+    
+    def eval_js_and_hooks(self, react_context: 'ReactContext'):
+        return self.expression.eval_js_and_hooks(react_context)
+    
+    def initial_val_js(self, react_context: 'ReactContext', clear_hooks: bool = False, delimiter: str = sq):
+        var_val_expr = value_js_representation(self.eval_initial(react_context), react_context, delimiter)
+        js, hooks = self.eval_js_and_hooks(react_context)
+
+        if clear_hooks:
+            hooks = []
+
+        hooks_js = ReactData.convert_hooks_to_js(hooks)
+
+        recalc_js_function = (f'function(){{return {js};}}' if hooks else 'undefined')
         
-        return f'__reactive_data({var_val_expr})'
+        return f'__reactive_data({var_val_expr},{hooks_js},{recalc_js_function})'
+    
+    def reactive_val_js(self, react_context: 'ReactContext', other_expression: str = None,
+        clear_hooks: bool = False, delimiter: str = sq):
+
+        js, hooks = self.eval_js_and_hooks(react_context, delimiter) \
+            if other_expression is None else (other_expression, [])
+        
+        if clear_hooks:
+            hooks = []
+
+        if hooks:
+            recalc_js_function = f'function(){{return {js};}}'
+            js = 'undefined'
+        else:
+            recalc_js_function = f'undefined'
+
+        hooks_js = ReactData.convert_hooks_to_js(hooks)
+        
+        return f'__reactive_data({js},{hooks_js},{recalc_js_function})'
 
 class ReactVar(ReactData):
     def __init__(self, name: str, react_expression: 'Expression'):
         super().__init__(react_expression)
         self.name: str = name
         self.context: Optional[ReactContext] = None
-    
-    def __repr__(self) -> str:
-        return f"ReactVar(name: {repr(self.name)}, expression: {repr(self.expression)}, context: {repr(self.context)})"
+
+    def __str__(self) -> str:
+        return f'ReactVar(name: {repr(self.name)}, expression: {repr(self.expression)}, context: {repr(self.context)}' + \
+            (f', saved_initial={self.saved_initial}' if hasattr(self, 'saved_initial') else '') + \
+            ')'
 
     def get_name(self) -> str:
         return self.name
+    
+    def eval_initial(self, react_context: 'ReactContext'):
+        if hasattr(self, 'saved_initial'):
+            return self.saved_initial
+        else:
+            context = react_context if self.context is None else self.context
+            return self.expression.eval_initial(context)
+    
+    def eval_js_and_hooks(self, react_context: 'ReactContext', delimiter: str = sq):
+        context = react_context if self.context is None else self.context
+        return self.expression.eval_js_and_hooks(context)
 
     def js(self) -> str:
         return self.context.var_js(self)
@@ -100,17 +159,23 @@ class ReactVar(ReactData):
     def js_get(self) -> str:
         return "(" + self.js() + ".val)"
     
-    def js_set(self, js_expression: str, alt_js_name: Optional[str] = None) -> str:
-        return f'__reactive_data_set({self.js() if alt_js_name is None else alt_js_name},{js_expression});'
+    def js_set(self, js_expression: str, alt_js_name: Optional[str] = None, expression_hooks: Iterable['ReactVar'] = []) -> str:
+        if expression_hooks:
+            recalc_js_function = f'function(){{return {js_expression};}}'
+            js_expression = 'undefined'
+        else:
+            recalc_js_function = f'undefined'
+
+        expression_hooks_js = ReactData.convert_hooks_to_js(expression_hooks)
+
+        return f'__reactive_data_set({self.js() if alt_js_name is None else alt_js_name},' + \
+            f'{js_expression},{expression_hooks_js},{recalc_js_function});'
     
     def js_attach(self, js_callable: str, invoke_if_changed_from_initial: bool):
         return f'__reactive_data_attach({self.js()},{js_callable},{value_js_representation(invoke_if_changed_from_initial, self.context)})'
 
     def js_detach(self, js_attachment: str):
         return f'__reactive_data_detach({self.js()},{js_attachment});'
-
-    def js_detach_all(self):
-        return f'__reactive_data_detach_all({self.js()});'
     
     def js_notify(self, alt_js_name: Optional[str] = None):
         return f'__reactive_data_notify({self.js() if alt_js_name is None else alt_js_name});'
@@ -149,6 +214,15 @@ class ReactContext:
         if parent is not None and not fully_reactive and parent.fully_reactive:
             # TODO: Add tag name by using self.tag_name
             raise template.TemplateSyntaxError("Can't have a fully reactive child inside a non-full reactive one.")
+    
+    def __repr__(self) -> str:
+        return f'{super().__repr__()}({str(self)})'
+
+    def basic_repr(self) -> str:
+        return super().__repr__()
+    
+    def __str__(self) -> str:
+        return f'ReactContext(id={self.id}, vars={self.vars}, parent={None if self.parent is None else self.parent.basic_repr()})'
     
     def destroy(self):
         """Destroy all children when done, to help gc avoiding cycle references"""

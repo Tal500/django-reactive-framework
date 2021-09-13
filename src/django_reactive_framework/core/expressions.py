@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from itertools import chain
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from django import template
 
@@ -47,7 +47,9 @@ class Expression:
 
 class SettableExpression(Expression):
     @abstractmethod
-    def js_set(self, react_context: Optional[ReactContext], js_expression: str) -> str:
+    def js_set(self, react_context: Optional[ReactContext], js_expression: str,
+        expression_hooks: Iterable[ReactVar] = []) -> str:
+
         """ Return the js expression for setting the self expression to the js_expression"""
         pass
 
@@ -230,6 +232,12 @@ class ArrayExpression(Expression):
 class DictExpression(Expression):
     def __init__(self, dict_expression: Dict[str, Expression]):
         self.dict_expression = dict_expression
+        self.has_react_data = False
+
+        for key, expression in self.dict_expression.items():
+            if isinstance(expression, NewReactDataExpression):
+                self.has_react_data = True
+                break
     
     def __str__(self) -> str:
         return f'{{{",".join((f"{key}:{str(expression)}" for key, expression in self.dict_expression.items()))}}}'
@@ -258,7 +266,18 @@ class DictExpression(Expression):
             key_js_expressions.append((key, js_expression))
             all_hooks.extend(hooks)
         
-        return f'{{{",".join((f"{key}:{expression}" for key, expression in key_js_expressions))}}}', all_hooks
+        if self.has_react_data:
+            js_result = \
+                '( () => {\n'+ \
+                    ''.join(f'const {key}={js_expression};\n' for key, js_expression in key_js_expressions) + \
+                    'return {' + \
+                        ','.join((f'{key}:{key}' for key, js_expression in key_js_expressions)) + \
+                    '};\n' + \
+                '} )()'
+        else:
+            js_result = f'{{{",".join((f"{key}:{js_expression}" for key, js_expression in key_js_expressions))}}}'
+        
+        return js_result, all_hooks
     
     @staticmethod
     def try_parse(expression: str) -> Optional['DictExpression']:
@@ -315,25 +334,28 @@ class VariableExpression(SettableExpression):
         var = self.var(react_context)
 
         if var:
-            return var.expression.eval_initial(react_context)
+            return var.eval_initial(react_context)
         else:
             return ''
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         var = self.var(react_context)
+        parent_vars = [var for var in react_context.parent.vars]
 
         if var:
             return var.js_get(), [var]
         else:
             return value_to_expression('').eval_js_and_hooks(react_context, delimiter)
     
-    def js_set(self, react_context: Optional[ReactContext], js_expression: str):
+    def js_set(self, react_context: Optional[ReactContext], js_expression: str,
+        expression_hooks: Iterable[ReactVar] = []) -> str:
+
         var = self.var(react_context)
 
         if var is None:
             raise template.TemplateSyntaxError('No reactive variable named %s was found' % self.var_name)
 
-        return var.js_set(js_expression)
+        return var.js_set(js_expression, expression_hooks=expression_hooks)
     
     def js_notify(self, react_context: Optional[ReactContext]) -> str:
         var = self.var(react_context)
@@ -368,7 +390,9 @@ class NativeVariableExpression(SettableExpression):
     def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         return self.var_name, []
     
-    def js_set(self, react_context: Optional[ReactContext], js_expression: str):
+    def js_set(self, react_context: Optional[ReactContext], js_expression: str,
+        expression_hooks: Iterable[ReactVar] = []) -> str:
+
         return f'{self.var_name}={js_expression};'
     
     def js_notify(self, react_context: Optional[ReactContext]) -> str:
@@ -404,8 +428,9 @@ class PropertyExpression(Expression):
             if key in current:
                 current = current[key]
             else:
-                raise template.TemplateSyntaxError(f"Error while parsing expression {self}: " +\
-                    "There is no key named {key} in {current}")
+                raise template.TemplateSyntaxError(f"Error while evaluating expression initial value of {self}: " +\
+                    f"There is no key named '{key}' in {{{current}}}. " + \
+                    f"Root expression: {{{self.root_expression}}} val: {{{root_val}}}.")
         
         return current
 
@@ -450,7 +475,9 @@ class SettablePropertyExpression(PropertyExpression, SettableExpression):
         
         return SettablePropertyExpression(root_expression_reduced, self.key_path)
     
-    def js_set(self, react_context: Optional[ReactContext], js_expression: str):
+    def js_set(self, react_context: Optional[ReactContext], js_expression: str,
+        expression_hooks: Iterable[ReactVar] = []) -> str:
+
         js_path_expression = self.eval_js_and_hooks(react_context)[0]
 
         return f'{js_path_expression} = {js_expression}; ' + self.js_notify(react_context)
@@ -574,11 +601,7 @@ class FunctionCallExpression(Expression):
         return self.function.eval_initial(react_context, self.args)
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
-        js_expression = self.function.eval_js(react_context, delimiter, self.args)
-
-        all_hooks = list(chain.from_iterable((arg.eval_js_and_hooks(react_context, delimiter)[1] for arg in self.args)))
-        
-        return js_expression, all_hooks
+        return self.function.eval_js_and_hooks(react_context, delimiter, self.args)
     
     @staticmethod
     def try_parse(expression: str) -> Optional['FunctionCallExpression']:
@@ -782,23 +805,16 @@ class NewReactDataExpression(Expression):
         self.data: ReactData = data
     
     def __str__(self):
-        return f'ReactData(name={self.data.get_name()},expression={self.data.expression}' + \
-            (f',tracked_initial={self.data.tracked_initial}' if hasattr(self.data, 'tracked_initial') else '') + \
-            ')'
+        return f'NewReactDataExpression(data={self.data})'
     
     def reduce(self, template_context: template.Context):
         return self
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
-        if hasattr(self.data, 'saved_initial'):
-            value = self.data.saved_initial
-        else:
-            value = self.data.expression.eval_initial(react_context)
-
-        return ReactData(value_to_expression(value))
+    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactData:
+        return self.data
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
-        return self.data.initial_val_js(react_context, delimiter=delimiter), [self.data]
+        return self.data.initial_val_js(react_context, delimiter=delimiter), []
 
 # TODO: Support also escaping '/' (if needed)
 class EscapingContainerExpression(Expression):
