@@ -593,11 +593,7 @@ class FunctionCallExpression(Expression):
         return self.function.eval_initial(react_context, self.args)
 
     def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
-        js_expression = self.function.eval_js(react_context, delimiter, self.args)
-
-        all_hooks = list(chain.from_iterable((arg.eval_js_and_hooks(react_context, delimiter)[1] for arg in self.args)))
-        
-        return js_expression, all_hooks
+        return self.function.eval_js_and_hooks(react_context, delimiter, self.args)
     
     @staticmethod
     def try_parse(expression: str) -> Optional['FunctionCallExpression']:

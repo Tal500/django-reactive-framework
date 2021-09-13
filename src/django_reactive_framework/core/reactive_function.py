@@ -15,9 +15,17 @@ class ReactiveFunction:
     def eval_initial(self, reactive_context: ReactContext, args: List['Expression']) -> ReactValType:
         pass
 
-    @abstractmethod
+    def eval_js_and_hooks(self, reactive_context: ReactContext, delimiter: str, args: List['Expression']) -> str:
+        js_expression = self.eval_js(reactive_context, delimiter, args)
+        all_hooks = self.eval_hooks(reactive_context, args)
+
+        return js_expression, all_hooks
+
     def eval_js(self, reactive_context: ReactContext, delimiter: str, args: List['Expression']) -> str:
         pass
+
+    def eval_hooks(self, reactive_context: ReactContext, args: List['Expression']) -> str:
+        return chain.from_iterable((arg.eval_js_and_hooks(reactive_context)[1] for arg in args))
 
 class CustomReactiveFunction(ReactiveFunction):
     def __init__(self, eval_initial_func, eval_js_func, validate_args_func = lambda args: True):
