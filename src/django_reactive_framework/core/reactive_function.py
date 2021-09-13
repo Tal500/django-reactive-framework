@@ -62,7 +62,7 @@ class PresentFunction(ReactiveFunction):
         
         js, hooks = args[0].eval_js_and_hooks(reactive_context)
 
-        return js, []
+        return js
 
     def eval_hooks(self, reactive_context: ReactContext, args: List['Expression']) -> str:
         self.validate_args(args)
