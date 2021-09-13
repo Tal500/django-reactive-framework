@@ -145,7 +145,8 @@ Even None is supported:
 {% #/def sum_result=2+number %}
 
 {% #tag p %}
-You may also use plus operator:<br />
+You may also use plus operator, with a number that is updating every second,
+(with the present function to avoid self referencing, see in the next paragraph):<br />
 2+{% #/print number %}={% #/print sum_result %}<br />
 "{% #/print greeting %}"+" "+"World"={% #/print greeting+" "+"World" %}
 {% /tag %}
@@ -155,16 +156,52 @@ Using the function present(), we can print the values without trigerring rerende
 The original equation was: 2+{% #/print present(number) %}={% #/print present(sum_result) %}<br />
 {% /tag %}
 
+{% #/def result_choice='number_sum' %}
+{% #/def some_result=(result_choice==='number_sum')?(2+number):greeting+" "+"World" %}
+
+<p>
+Using the set tag (and the present function to avoid self referencing),
+we may chose which result to show, with keeping tracking of the result without setting it repeatedly:<br />
+<form>
+
+<label>
+    <input type="radio" name="result_choice" value="number_sum" checked onchange="setRadioChoice('number_sum')" />
+    Show Number Sum
+</label>
+<br />
+<label>
+    <input type="radio" name="result_choice" value="str_concat" onchange="setRadioChoice('str_concat')" />
+    Show String Concatenation
+</label>
+
+</form>
+<br />
+{%#%}
+<span>
+Result: {% #/print some_result %}
+</span>
+{%/%}
+
+</p>
+
 <script>
+function update_number() {
+    {% #/set number=present(number+1) %}
+
+    setTimeout(update_number, 1000);
+}
+setTimeout(update_number, 1000);
+    
 setTimeout(
     function() {
-    {% #set number %}{% #/get 4 %}{% /set %}
-    
-    setTimeout(
-        function() {
-        {% #set greeting %}'Hello'{% /set %}
-        }, 500);
-    }, 1000);
+    {% #set greeting %}'Hello'{% /set %}
+    }, 1500);
+
+function setRadioChoice(choice) {
+    {% #set result_choice %}
+    choice
+    {% /set %}
+}
 </script>
 
 {% #/def test_json={v1: '2', 'v7': '3', nested: {A: 1, B: 2}, arr: [{a:1, b:2}, {c: 3}]} %}
@@ -179,9 +216,7 @@ You can also use JSON/dictionary values:
 <script>
 setTimeout(
     function() {
-    {% #/get test_json %}.v10 = 5
-
-    {% #/notify test_json %}
+    {% #/set test_json.v10 = 5 %}
     
     setTimeout(
         function() {

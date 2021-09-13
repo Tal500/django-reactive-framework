@@ -1232,53 +1232,96 @@ class ReactSetNode(ReactNode):
     tag_name = 'set'
 
     class Context(ReactContext):
-        def __init__(self, parent, settable_expression: SettableExpression):
+        def __init__(self, parent, settable_expression: SettableExpression, val_expression: Optional[Expression]):
             self.settable_expression: SettableExpression = settable_expression
+            self.val_expression: Optional[Expression] = val_expression
             super().__init__(id='', parent=parent, fully_reactive=False)
 
         def render_html(self, subtree: List) -> str:
-            js_expression = self.render_html_inside(subtree)
+            if self.val_expression is None:
+                js_expression = self.render_html_inside(subtree)
+                hooks = []
+            else:
+                js_expression, hooks = self.val_expression.eval_js_and_hooks(self)
+            
+            print('js_expression', js_expression)
 
-            output = self.settable_expression.js_set(self, js_expression)
+            output = self.settable_expression.js_set(self, js_expression, hooks)
 
             return output# TODO: Shell we use "mark_safe" here?
 
-    def __init__(self, nodelist: template.NodeList, settable_expression: SettableExpression):
+    def __init__(self, nodelist: template.NodeList, settable_expression: SettableExpression, val_expression: Optional[Expression]):
         self.settable_expression = settable_expression
+        self.val_expression: Optional[Expression] = val_expression
         super().__init__(nodelist=nodelist)
 
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
-        settable_expression: Expression = self.settable_expression.reduce(template_context)
+        settable_expression: SettableExpression = self.settable_expression.reduce(template_context)
+        val_expression: Optional[Expression] = None if self.val_expression is None else \
+            self.val_expression.reduce(template_context)
 
-        return ReactSetNode.Context(parent_context, settable_expression)
+        return ReactSetNode.Context(parent_context, settable_expression, val_expression)
 
 @register.tag('#' + ReactSetNode.tag_name)
+@register.tag('#/' + ReactSetNode.tag_name)
 def do_reactset(parser: template.base.Parser, token: template.base.Token):
     """Set current present value to a js expression"""
 
-    # TODO: Make the difference between bounded and unbounded expressions. (Currently unbound)
-
     bits = list(smart_split(token.contents, whitespaces, common_delimiters))
 
-    if len(bits) != 2:
+    tag = token.contents.split()[0]
+
+    if len(bits) < 2:
         raise template.TemplateSyntaxError(
-            "%r tag requires at exactly two arguments" % token.contents.split()[0]
+            "%r tag requires exactly one aurgument." % tag
         )
     # otherwise
 
-    var_expression = bits[1]
+    self_enclosing = tag.startswith('#/')
+
+    remaining_bits = bits[1:]
+
+    parts = tuple(split_kwargs(remaining_bits))
+
+    if len(parts) != 1:
+        raise template.TemplateSyntaxError(
+            "%r tag (which is self enclosing) requires exactly one aurgument!" %
+                token.contents.split()[0]
+        )
     
-    nodelist: template.NodeList = parser.parse(('/' + ReactSetNode.tag_name,))
-    parser.delete_first_token()
+    settable_expression_str, val_expression_str = parts[0]
 
-    expression = parse_expression(var_expression)
+    if self_enclosing:
+        if val_expression_str is None:
+            raise template.TemplateSyntaxError(
+                "%r tag (which is self enclosing) requires exactly one aurgument in the form of {settable}={val}" %
+                    token.contents.split()[0]
+            )
+    else:
+        if val_expression_str is not None:
+            raise template.TemplateSyntaxError(
+                "%r tag (which isn't self enclosing) requires exactly one aurgument in the form of {settable}" %
+                    token.contents.split()[0]
+            )
+    # otherwise
 
-    if not isinstance(expression, SettableExpression):
+    #return ReactDefNode(var_name, parse_expression(val_expression_str))
+    
+    if self_enclosing:
+        nodelist = None
+    else:
+        nodelist = parser.parse(('/' + ReactSetNode.tag_name,))
+        parser.delete_first_token()
+
+    settable_expression = parse_expression(settable_expression_str)
+    val_expression = None if val_expression_str is None else parse_expression(val_expression_str)
+
+    if not isinstance(settable_expression, SettableExpression):
         raise template.TemplateSyntaxError(
             "%r tag requires the first expression to be reactively setable." % token.contents.split()[0]
         )
 
-    return ReactSetNode(nodelist, expression)
+    return ReactSetNode(nodelist, settable_expression, val_expression)
 
 class ReactNotifyNode(ReactNode):
     tag_name = 'notify'

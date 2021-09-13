@@ -159,8 +159,17 @@ class ReactVar(ReactData):
     def js_get(self) -> str:
         return "(" + self.js() + ".val)"
     
-    def js_set(self, js_expression: str, alt_js_name: Optional[str] = None) -> str:
-        return f'__reactive_data_set({self.js() if alt_js_name is None else alt_js_name},{js_expression},__reactive_empty_array,null);'
+    def js_set(self, js_expression: str, alt_js_name: Optional[str] = None, expression_hooks: Iterable['ReactVar'] = []) -> str:
+        if expression_hooks:
+            recalc_js_function = f'function(){{return {js_expression};}}'
+            js_expression = 'undefined'
+        else:
+            recalc_js_function = f'undefined'
+
+        expression_hooks_js = ReactData.convert_hooks_to_js(expression_hooks)
+
+        return f'__reactive_data_set({self.js() if alt_js_name is None else alt_js_name},' + \
+            f'{js_expression},{expression_hooks_js},{recalc_js_function});'
     
     def js_attach(self, js_callable: str, invoke_if_changed_from_initial: bool):
         return f'__reactive_data_attach({self.js()},{js_callable},{value_js_representation(invoke_if_changed_from_initial, self.context)})'

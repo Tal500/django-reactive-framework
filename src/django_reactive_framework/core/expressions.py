@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from itertools import chain
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from django import template
 
@@ -47,7 +47,9 @@ class Expression:
 
 class SettableExpression(Expression):
     @abstractmethod
-    def js_set(self, react_context: Optional[ReactContext], js_expression: str) -> str:
+    def js_set(self, react_context: Optional[ReactContext], js_expression: str,
+        expression_hooks: Iterable[ReactVar] = []) -> str:
+
         """ Return the js expression for setting the self expression to the js_expression"""
         pass
 
@@ -345,13 +347,15 @@ class VariableExpression(SettableExpression):
         else:
             return value_to_expression('').eval_js_and_hooks(react_context, delimiter)
     
-    def js_set(self, react_context: Optional[ReactContext], js_expression: str):
+    def js_set(self, react_context: Optional[ReactContext], js_expression: str,
+        expression_hooks: Iterable[ReactVar] = []) -> str:
+
         var = self.var(react_context)
 
         if var is None:
             raise template.TemplateSyntaxError('No reactive variable named %s was found' % self.var_name)
 
-        return var.js_set(js_expression)
+        return var.js_set(js_expression, expression_hooks=expression_hooks)
     
     def js_notify(self, react_context: Optional[ReactContext]) -> str:
         var = self.var(react_context)
@@ -386,7 +390,9 @@ class NativeVariableExpression(SettableExpression):
     def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
         return self.var_name, []
     
-    def js_set(self, react_context: Optional[ReactContext], js_expression: str):
+    def js_set(self, react_context: Optional[ReactContext], js_expression: str,
+        expression_hooks: Iterable[ReactVar] = []) -> str:
+
         return f'{self.var_name}={js_expression};'
     
     def js_notify(self, react_context: Optional[ReactContext]) -> str:
@@ -469,7 +475,9 @@ class SettablePropertyExpression(PropertyExpression, SettableExpression):
         
         return SettablePropertyExpression(root_expression_reduced, self.key_path)
     
-    def js_set(self, react_context: Optional[ReactContext], js_expression: str):
+    def js_set(self, react_context: Optional[ReactContext], js_expression: str,
+        expression_hooks: Iterable[ReactVar] = []) -> str:
+
         js_path_expression = self.eval_js_and_hooks(react_context)[0]
 
         return f'{js_path_expression} = {js_expression}; ' + self.js_notify(react_context)
