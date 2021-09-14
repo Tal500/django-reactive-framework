@@ -1,5 +1,7 @@
 from typing import Any, Container, Dict, Iterable, Iterator, List, Optional, Tuple
 
+import itertools
+
 from django import template
 
 
@@ -268,3 +270,6 @@ def is_iterable_empty(iterable: Iterable) -> bool:
 
 def clean_js_execution_expression(js_block: str) -> str:
     return f'( () => {{\n{js_block}\n}} )();'
+
+def enumerate_reversed(data: Iterable):
+    return zip(itertools.count(len(data) - 1, -1), reversed(data))
