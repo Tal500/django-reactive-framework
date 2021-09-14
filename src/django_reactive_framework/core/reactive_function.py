@@ -1,6 +1,8 @@
 from abc import abstractmethod
 from typing import List, Dict
 
+from itertools import chain
+
 from django import template
 
 from .base import ReactContext, ReactValType

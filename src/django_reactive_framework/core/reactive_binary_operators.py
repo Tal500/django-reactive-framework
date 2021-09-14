@@ -1,7 +1,10 @@
 from abc import abstractmethod
 from typing import Dict, List
 
+from django import template
+
 from .base import ReactContext, ReactValType
+from .expressions.interfaces import Expression
 from .utils import manual_non_empty_sum
 
 class ReactiveBinaryOperator:
@@ -11,20 +14,20 @@ class ReactiveBinaryOperator:
         if len(args) < 2:
             raise Exception(f'Internal Reactive Error: Not enough args for binary operator! Args: {args}')
     
-    def eval_initial_from_values(self, vals: List[ReactValType]) -> ReactValType:
+    def eval_initial_from_values(self, vals: List['ReactValType']) -> 'ReactValType':
         pass
 
     def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
         pass
 
-    def eval_initial(self, reactive_context: ReactContext, args: List['Expression']) -> ReactValType:
+    def eval_initial(self, reactive_context: 'ReactContext', args: List['Expression']) -> 'ReactValType':
         self.validate_args(args)
         
         vals = [arg.eval_initial(reactive_context) for arg in args]
 
         return self.eval_initial_from_values(vals)
 
-    def eval_js(self, reactive_context: ReactContext, args: List['Expression'], delimiter: str) -> str:
+    def eval_js(self, reactive_context: 'ReactContext', args: List['Expression'], delimiter: str) -> str:
         self.validate_args(args)
         
         vals = [arg.eval_js_and_hooks(reactive_context, delimiter)[0] for arg in args]
@@ -36,7 +39,7 @@ class StrictEqualityOperator(ReactiveBinaryOperator):
         if len(args) != 2:
             raise template.TemplateSyntaxError(f'Strict equality operator must have exactly two args! Args: {args}')
     
-    def eval_initial_from_values(self, vals: List[ReactValType]) -> ReactValType:
+    def eval_initial_from_values(self, vals: List['ReactValType']) -> 'ReactValType':
         lhs_val, rhs_val = vals
 
         result = lhs_val is rhs_val
@@ -58,7 +61,7 @@ class StrictInequalityOperator(ReactiveBinaryOperator):
         if len(args) != 2:
             raise template.TemplateSyntaxError(f'Strict inequality operator must have exactly two args! Args: {args}')
     
-    def eval_initial_from_values(self, vals: List[ReactValType]) -> ReactValType:
+    def eval_initial_from_values(self, vals: List['ReactValType']) -> 'ReactValType':
         lhs_val, rhs_val = vals
         
         result = lhs_val is not rhs_val
@@ -79,7 +82,7 @@ class BoolComparingOperator(ReactiveBinaryOperator):
     def eval_initial_from_values(self, vals: List[bool]) -> bool:
         pass
 
-    def eval_initial(self, reactive_context: ReactContext, args: List['Expression']) -> bool:
+    def eval_initial(self, reactive_context: 'ReactContext', args: List['Expression']) -> bool:
         return super().eval_initial(reactive_context, args)
 
 class AndOperator(BoolComparingOperator):
@@ -130,7 +133,7 @@ class NumberInequalityOperator(ReactiveBinaryOperator):
     def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
         return self.eval_js_from_two_js(js_expressions[0], js_expressions[1], delimiter)
 
-    def eval_initial(self, reactive_context: ReactContext, args: List['Expression']) -> bool:
+    def eval_initial(self, reactive_context: 'ReactContext', args: List['Expression']) -> bool:
         self.validate_args(args)
         
         vals = [arg.eval_initial(reactive_context) for arg in args]
@@ -143,7 +146,7 @@ class NumberInequalityOperator(ReactiveBinaryOperator):
         return self.eval_initial_from_values(vals)
 
 class GreaterOrEqualOperator(NumberInequalityOperator):
-    def eval_initial_from_two_values(self, lhs_val: ReactValType, rhs_val: ReactValType) -> bool:
+    def eval_initial_from_two_values(self, lhs_val: 'ReactValType', rhs_val: 'ReactValType') -> bool:
         return lhs_val >= rhs_val
 
     def eval_js_from_two_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
@@ -152,7 +155,7 @@ class GreaterOrEqualOperator(NumberInequalityOperator):
 ReactiveBinaryOperator.operators['>='] = GreaterOrEqualOperator()
 
 class LessOrEqualOperator(NumberInequalityOperator):
-    def eval_initial_from_two_values(self, lhs_val: ReactValType, rhs_val: ReactValType) -> bool:
+    def eval_initial_from_two_values(self, lhs_val: 'ReactValType', rhs_val: 'ReactValType') -> bool:
         return lhs_val <= rhs_val
 
     def eval_js_from_two_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
@@ -172,7 +175,7 @@ class GreaterOperator(NumberInequalityOperator):
 ReactiveBinaryOperator.operators['>'] = GreaterOperator()
 
 class LessOperator(NumberInequalityOperator):
-    def eval_initial_from_value(self, lhs_val: ReactValType, rhs_val: ReactValType) -> bool:
+    def eval_initial_from_value(self, lhs_val: 'ReactValType', rhs_val: 'ReactValType') -> bool:
         return lhs_val < rhs_val
 
     def eval_js_from_two_js(self, lhs_js: str, rhs_js: str, delimiter: str) -> str:
@@ -181,12 +184,10 @@ class LessOperator(NumberInequalityOperator):
 ReactiveBinaryOperator.operators['<'] = LessOperator()
 
 class SumOperator(ReactiveBinaryOperator):
-    def eval_initial_from_values(self, vals: List[ReactValType]) -> ReactValType:
+    def eval_initial_from_values(self, vals: List['ReactValType']) -> 'ReactValType':
         return manual_non_empty_sum(vals)
 
     def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
         return '+'.join(js_expressions)
 
 ReactiveBinaryOperator.operators['+'] = SumOperator()
-
-from .expressions import *

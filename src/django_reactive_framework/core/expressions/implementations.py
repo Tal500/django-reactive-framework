@@ -1,62 +1,16 @@
-from abc import abstractmethod
-from itertools import chain
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+from itertools import chain
 
 from django import template
 
-from .base import ReactContext, ReactData, ReactValType, ReactHook, ReactVar, value_js_representation, value_to_expression
-from .reactive_function import ReactiveFunction
-from .reactive_binary_operators import ReactiveBinaryOperator
-from .reactive_unary_operators import ReactiveUnaryOperator
-from .utils import manual_non_empty_sum, remove_whitespaces_on_boundaries, str_repr, str_repr_s, parse_string, smart_split, common_delimiters, sq
+from ..base import ReactContext, ReactData, ReactValType, ReactHook, ReactVar, value_js_representation, value_to_expression
+from ..reactive_function import ReactiveFunction
+from ..reactive_binary_operators import ReactiveBinaryOperator
+from ..reactive_unary_operators import ReactiveUnaryOperator
+from ..utils import remove_whitespaces_on_boundaries, str_repr, str_repr_s, parse_string, smart_split, common_delimiters, sq
 
-class Expression:
-    """ An immutable structure for holding expressions. """
-
-    def __repr__(self) -> str:
-        return f'{super().__repr__()}({str(self)})'
-    
-    def __str__(self) -> str:
-        return 'Expression'
-    
-    @property
-    def constant(self) -> bool:
-        return False
-
-    @abstractmethod
-    def reduce(self, template_context: template.Context) -> 'Expression':
-        """ Return a reduced expression with template context variables subtituted. """
-        pass
-
-    @abstractmethod
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
-        """ Return the evaluated initial value """
-        pass
-
-    @abstractmethod
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
-        """ Return a tupple of (js_expression, hooks) """
-        pass
-
-    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
-        """ Return a tupple of (js_html_output_expression, hooks) """
-        val_js, hooks = self.eval_js_and_hooks(react_context, delimiter)
-        
-        # TODO: HTML escaping in this JS method?
-        return f'__reactive_print_html({val_js})', hooks
-
-class SettableExpression(Expression):
-    @abstractmethod
-    def js_set(self, react_context: Optional[ReactContext], js_expression: str,
-        expression_hooks: Iterable[ReactVar] = []) -> str:
-
-        """ Return the js expression for setting the self expression to the js_expression"""
-        pass
-
-    @abstractmethod
-    def js_notify(self, react_context: Optional[ReactContext]) -> str:
-        """ Return the js expression for notifying the self expression"""
-        pass
+from .interfaces import Expression, SettableExpression
 
 class StringExpression(Expression):
     def __init__(self, val: str):
@@ -72,13 +26,13 @@ class StringExpression(Expression):
     def reduce(self, template_context: template.Context):
         return self
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         return self.val
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         return str_repr(self.val, delimiter), []
 
-    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_html_output_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         # TODO: HTML escaping?
         return str_repr(self.val, delimiter), []
     
@@ -106,13 +60,13 @@ class IntExpression(Expression):
     def reduce(self, template_context: template.Context):
         return self
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         return self.val
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         return str(self.val), []
 
-    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_html_output_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         return f'{delimiter}{self.val}{delimiter}', []
     
     @staticmethod
@@ -136,13 +90,13 @@ class BoolExpression(Expression):
     def reduce(self, template_context: template.Context):
         return self
     
-    def eval_initial(self, react_context: Optional[ReactContext], delimiter: str = sq) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> 'ReactValType':
         return self.val
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         return 'true' if self.val else 'false', []
 
-    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext]) -> Tuple[str, List[ReactHook]]:
+    def eval_js_html_output_and_hooks(self, react_context: Optional['ReactContext']) -> Tuple[str, List['ReactHook']]:
         return f"'{str(self.val)}'"
     
     @staticmethod
@@ -168,13 +122,13 @@ class NoneExpression(Expression):
     def reduce(self, template_context: template.Context):
         return self
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         return None
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         return 'null', []
 
-    def eval_js_html_output_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_html_output_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         return f"'None'"
     
     @staticmethod
@@ -203,10 +157,10 @@ class ArrayExpression(Expression):
     def reduce(self, template_context: template.Context):
         return ArrayExpression([expression.reduce(template_context) for expression in self.elements_expression])
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         return [expression.eval_initial(react_context) for expression in self.elements_expression]
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         js_expressions, all_hooks = [], []
 
         for expression in self.elements_expression:
@@ -254,10 +208,10 @@ class DictExpression(Expression):
     def reduce(self, template_context: template.Context):
         return DictExpression({key: expression.reduce(template_context) for key, expression in self.dict_expression.items()})
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         return {key: expression.eval_initial(react_context) for key, expression in self.dict_expression.items()}
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         key_js_expressions, all_hooks = [], []
 
         for key, expression in self.dict_expression.items():
@@ -322,7 +276,7 @@ class VariableExpression(SettableExpression):
         else:
             return self
     
-    def var(self, react_context: Optional[ReactContext]) -> Optional[ReactVar]:
+    def var(self, react_context: Optional['ReactContext']) -> Optional['ReactVar']:
         if react_context is None:
             raise Exception("Can't evaluate a VariableExpression if react_context=None")
         # otherwise
@@ -330,7 +284,7 @@ class VariableExpression(SettableExpression):
         # Notice: Might return none which means that the variable isn't registered as reactive variable.
         return react_context.search_var(self.var_name)
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         var = self.var(react_context)
 
         if var:
@@ -338,7 +292,7 @@ class VariableExpression(SettableExpression):
         else:
             return ''
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         var = self.var(react_context)
         parent_vars = [var for var in react_context.parent.vars]
 
@@ -347,8 +301,8 @@ class VariableExpression(SettableExpression):
         else:
             return value_to_expression('').eval_js_and_hooks(react_context, delimiter)
     
-    def js_set(self, react_context: Optional[ReactContext], js_expression: str,
-        expression_hooks: Iterable[ReactVar] = []) -> str:
+    def js_set(self, react_context: Optional['ReactContext'], js_expression: str,
+        expression_hooks: Iterable['ReactVar'] = []) -> str:
 
         var = self.var(react_context)
 
@@ -357,7 +311,7 @@ class VariableExpression(SettableExpression):
 
         return var.js_set(js_expression, expression_hooks=expression_hooks)
     
-    def js_notify(self, react_context: Optional[ReactContext]) -> str:
+    def js_notify(self, react_context: Optional['ReactContext']) -> str:
         var = self.var(react_context)
 
         if var is None:
@@ -384,18 +338,18 @@ class NativeVariableExpression(SettableExpression):
     def reduce(self, template_context: template.Context):
         return self
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         return self.initial_value
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         return self.var_name, []
     
-    def js_set(self, react_context: Optional[ReactContext], js_expression: str,
-        expression_hooks: Iterable[ReactVar] = []) -> str:
+    def js_set(self, react_context: Optional['ReactContext'], js_expression: str,
+        expression_hooks: Iterable['ReactVar'] = []) -> str:
 
         return f'{self.var_name}={js_expression};'
     
-    def js_notify(self, react_context: Optional[ReactContext]) -> str:
+    def js_notify(self, react_context: Optional['ReactContext']) -> str:
         return ''
 
 class PropertyExpression(Expression):
@@ -419,10 +373,10 @@ class PropertyExpression(Expression):
         
         return PropertyExpression(root_expression_reduced, self.key_path)
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         root_val = self.root_expression.eval_initial(react_context)
 
-        current: ReactValType = root_val
+        current: 'ReactValType' = root_val
 
         for key in self.key_path:
             if key in current:
@@ -434,7 +388,7 @@ class PropertyExpression(Expression):
         
         return current
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         root_var_js, hooks = self.root_expression.eval_js_and_hooks(react_context, delimiter)
 
         return '(' + root_var_js + ').' + '.'.join(self.key_path), hooks
@@ -475,14 +429,14 @@ class SettablePropertyExpression(PropertyExpression, SettableExpression):
         
         return SettablePropertyExpression(root_expression_reduced, self.key_path)
     
-    def js_set(self, react_context: Optional[ReactContext], js_expression: str,
-        expression_hooks: Iterable[ReactVar] = []) -> str:
+    def js_set(self, react_context: Optional['ReactContext'], js_expression: str,
+        expression_hooks: Iterable['ReactVar'] = []) -> str:
 
         js_path_expression = self.eval_js_and_hooks(react_context)[0]
 
         return f'{js_path_expression} = {js_expression}; ' + self.js_notify(react_context)
     
-    def js_notify(self, react_context: Optional[ReactContext]) -> str:
+    def js_notify(self, react_context: Optional['ReactContext']) -> str:
         settable_expression: SettableExpression = self.root_expression
         return settable_expression.js_notify(react_context)
 
@@ -495,7 +449,7 @@ class TernaryOperatorExpression(Expression):
     def __str__(self) -> str:
         return f'({self.condition}?{self.expression_if_true}:{self.expression_if_false})'
     
-    def eval_condition_initial(self, react_context: Optional[ReactContext]) -> bool:
+    def eval_condition_initial(self, react_context: Optional['ReactContext']) -> bool:
         condition_val = self.condition.eval_initial(react_context)
 
         if not isinstance(condition_val, bool):
@@ -518,13 +472,13 @@ class TernaryOperatorExpression(Expression):
     def reduce(self, template_context: template.Context):
         return TernaryOperatorExpression(self.condition, self.expression_if_true, self.expression_if_false)
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         if self.eval_condition_initial(react_context):
             return self.expression_if_true.eval_initial(react_context)
         else:
             return self.expression_if_false.eval_initial(react_context)
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         if self.condition.constant:
             if self.eval_condition_initial(None):
                 return self.expression_if_true.eval_js_and_hooks(react_context, delimiter)
@@ -597,10 +551,10 @@ class FunctionCallExpression(Expression):
         args_reduced = [arg.reduce(template_context) for arg in self.args]
         return FunctionCallExpression(self.name, self.function, args_reduced)
 
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         return self.function.eval_initial(react_context, self.args)
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         return self.function.eval_js_and_hooks(react_context, delimiter, self.args)
     
     @staticmethod
@@ -664,7 +618,7 @@ class BinaryOperatorExpression(Expression):
         args_reduced = [arg.reduce(template_context) for arg in self.args]
         return BinaryOperatorExpression(self.operator_symbol, self.operator, args_reduced)
 
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         return self.operator.eval_initial(react_context, self.args)
     
     def optimized_args(self):
@@ -697,7 +651,7 @@ class BinaryOperatorExpression(Expression):
         
         return optimized_arg_list
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         optimized_args = self.optimized_args()
 
         if len(optimized_args) == 0:
@@ -768,10 +722,10 @@ class UnaryOperatorExpression(Expression):
         arg_reduced = self.arg.reduce(template_context)
         return UnaryOperatorExpression(self.operator_symbol, self.operator, arg_reduced)
 
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactValType:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         return self.operator.eval_initial(react_context, self.arg)
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         if self.constant:
             return value_js_representation(self.eval_initial(react_context), react_context, delimiter=delimiter), []
         # otherwise
@@ -801,8 +755,8 @@ class UnaryOperatorExpression(Expression):
 
 # This expression type is used only internally, and the user can't create it manually.
 class NewReactDataExpression(Expression):
-    def __init__(self, data: ReactData):
-        self.data: ReactData = data
+    def __init__(self, data: 'ReactData'):
+        self.data: 'ReactData' = data
     
     def __str__(self):
         return f'NewReactDataExpression(data={self.data})'
@@ -810,10 +764,10 @@ class NewReactDataExpression(Expression):
     def reduce(self, template_context: template.Context):
         return self
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> ReactData:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactData':
         return self.data
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         return self.data.initial_val_js(react_context, delimiter=delimiter), []
 
 # TODO: Support also escaping '/' (if needed)
@@ -832,11 +786,11 @@ class EscapingContainerExpression(Expression):
     def reduce(self, template_context: template.Context):
         return EscapingContainerExpression(self.inner_expression.reduce(template_context), self.delimiter)
     
-    def eval_initial(self, react_context: Optional[ReactContext]) -> str:
+    def eval_initial(self, react_context: Optional['ReactContext']) -> str:
         return str(self.inner_expression.eval_initial(react_context)) \
             .translate(str.maketrans({self.delimiter: '\\' + self.delimiter}))
 
-    def eval_js_and_hooks(self, react_context: Optional[ReactContext], delimiter: str = sq) -> Tuple[str, List[ReactHook]]:
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
         inner_js_expression, hooks = self.inner_expression.eval_js_and_hooks(react_context)
 
         delimiter_escaped = self.delimiter if self.delimiter!=delimiter else ("\\"+delimiter)
