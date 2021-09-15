@@ -10,10 +10,11 @@ from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
-from ..core.expressions import BoolExpression, EscapingContainerExpression, Expression, FunctionCallExpression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, TernaryOperatorExpression, VariableExpression, parse_expression
+from ..core.expressions import BinaryOperatorExpression, BoolExpression, EscapingContainerExpression, Expression, FunctionCallExpression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, TernaryOperatorExpression, VariableExpression, parse_expression
 from ..core.reactive_function import CustomReactiveFunction
+from ..core.reactive_binary_operators import StrictEqualityOperator
 
-from ..core.utils import reduce_nodelist, remove_whitespaces_on_boundaries, split_kwargs, str_repr_s, smart_split, common_delimiters, dq, whitespaces
+from ..core.utils import enumerate_reversed, reduce_nodelist, remove_whitespaces_on_boundaries, split_kwargs, str_repr_s, smart_split, common_delimiters, dq, whitespaces
 
 register = template.Library()
 
@@ -992,7 +993,8 @@ class ReactClauseNode(ReactNode):
             return self.render_js_and_hooks_inside(subtree)
 
         def render_js_conditional_or_else(self, subtree: List,
-            else_js: str, else_hooks: Iterable[ReactHook]) -> Tuple[str, Iterable[ReactHook]]:
+            else_js: str, else_hooks: Iterable[ReactHook],
+            alias_condition: Optional[Expression] = None) -> Tuple[str, Iterable[ReactHook]]:
 
             inner_js, inner_hooks = self.render_js_and_hooks(subtree)
 
@@ -1002,8 +1004,20 @@ class ReactClauseNode(ReactNode):
                 else:
                     return else_js, else_hooks
             else:
-                condition_js, condition_hooks = self.condition.eval_js_and_hooks(self)
+                condition = self.condition if alias_condition is None else alias_condition
+                condition_js, condition_hooks = condition.eval_js_and_hooks(self)
                 return f'(({condition_js})?({inner_js}):({else_js}))', chain(condition_hooks, inner_hooks, else_hooks)
+
+        def make_expression_conditional_or_else(self, subtree: List,
+            if_true_expression: Expression, else_expression: Expression) -> Tuple[str, Iterable[ReactHook]]:
+
+            if self.condition.constant:
+                if self.condition.eval_initial(self):
+                    return if_true_expression
+                else:
+                    return else_expression
+            else:
+                return TernaryOperatorExpression(self.condition, if_true_expression, else_expression)
 
     def __init__(self, nodelist: template.NodeList, condition: Expression):
         self.condition = condition
@@ -1025,35 +1039,110 @@ class ReactIfNode(ReactNode):
     
         def var_js(self, var):
             return f'{var.name}_if{self.id}'
+        
+        def make_tracking_var(self, subtree) -> ReactVar:
+            else_expression = IntExpression(-1)
+
+            for i, element in enumerate_reversed(subtree):
+                context, subsubtree = element
+                context: ReactClauseNode.Context = context
+                else_expression = context.make_expression_conditional_or_else(subsubtree, IntExpression(i), else_expression)
+
+            current_clause_var = ReactVar('__reactive_current_clause', else_expression)
+            self.add_var(current_clause_var)
+
+            return current_clause_var
 
         def render_html(self, subtree: List) -> str:
-            matcheced_clause_context: Optional[ReactClauseNode.Context] = None
 
             # It's important to render everyone, so they can register their variables. (TODO: Find a better way)
+            # TODO: Keep only the active clause variables at init, and manually create them when invoked.
             html_outputs = [context.render_html(subsubtree) for context, subsubtree in subtree]
 
-            for i, element in enumerate(subtree):
-                context, subsubtree = element
-                if context.is_condition_met_initial():
-                    matcheced_clause_context = context
-                    matcheced_html_output = html_outputs[i]
-                    break
-            # otherwise
+            current_clause_var = self.make_tracking_var(subtree)
+            current_cluse = current_clause_var.eval_initial(self)
 
-            if matcheced_clause_context is None:
+            if current_cluse == -1:
                 return ''
             else:
-                return matcheced_html_output
+                return html_outputs[current_cluse]
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
             else_js, else_hooks = '\'\'', []
 
-            for element in reversed(subtree):
+            current_clause = self.make_tracking_var(subtree)
+
+            for i, element in enumerate_reversed(subtree):
                 context, subsubtree = element
                 context: ReactClauseNode.Context = context
-                else_js, else_hooks = context.render_js_conditional_or_else(subsubtree, else_js, else_hooks)
+                else_js, else_hooks = context.render_js_conditional_or_else(subsubtree, else_js, else_hooks,
+                    alias_condition=BinaryOperatorExpression('==',
+                        StrictEqualityOperator(),
+                        [VariableExpression(current_clause.name), IntExpression(i)]
+                        ))
             
-            return else_js, else_hooks
+            return else_js, []
+            
+        def render_script(self, subtree: Optional[List]) -> ResorceScript:
+            all_hooks: List[Set[ReactHook]] = \
+                [set(context.render_js_and_hooks(subsubtree)[1]) for context, subsubtree in subtree]
+            self.clear_render()
+
+            scripts = [context.render_script(subsubtree) for context, subsubtree in subtree]
+
+            current_clause_var = self.make_tracking_var(subtree)
+
+            script = ResorceScript()
+
+            script.initial_pre_calc = '{\n' + \
+                'const __reactive_clause_pre_scripts = ' + \
+                    f'[{",".join(f"function(){{{script.initial_pre_calc}}}" for script in scripts)}];\n' + \
+                f'if ({current_clause_var.js_get()} !== -1) {{\n' + \
+                    f'__reactive_clause_pre_scripts[{current_clause_var.js_get()}]();\n' + \
+                '}\n' + \
+                '}\n'
+            
+            script.initial_post_calc = '{\n' + \
+                '// If post calc\n' + \
+                'const __reactive_clause_post_scripts = ' + \
+                    f'[{",".join(f"function(){{{script.initial_post_calc}}}" for script in scripts)}];\n' + \
+                f'{current_clause_var.js()}.attachment_main = ' + \
+                    current_clause_var.js_attach('__reactive_reset_content', True) + '\n' + \
+                ''.join(chain.from_iterable(
+                    chain(
+                        (f'{"else " if i > 0  else ""}if ({current_clause_var.js_get()} == {i}) {{\n', ),
+                        (f'{current_clause_var.js()}.attachment_{i}_var_{hook.get_name()} = ' + \
+                        hook.js_attach('__reactive_reset_content', True) + ';\n'
+                        for hook in hooks),
+                        ('}\n', )
+                    )
+                    for i, hooks in enumerate(all_hooks)
+                ) ) + \
+                f'if ({current_clause_var.js_get()} !== -1) {{\n' + \
+                    f'__reactive_clause_post_scripts[{current_clause_var.js_get()}]();\n' + \
+                '}\n' + \
+                '}\n'
+
+            script.destructor = '{\n' + \
+                '// If destructor\n' + \
+                'const __reactive_clause_destructor_scripts = ' + \
+                    f'[{",".join(f"function(){{{script.destructor}}}" for script in scripts)}];\n' + \
+                f'if ({current_clause_var.js_get()} !== -1) {{\n' + \
+                    f'__reactive_clause_destructor_scripts[{current_clause_var.js_get()}]();\n' + \
+                '}\n' + \
+                current_clause_var.js_detach(f'{current_clause_var.js()}.attachment_main') + '\n' + \
+                ''.join(chain.from_iterable(
+                    chain(
+                        (f'{"else " if i > 0  else ""}if ({current_clause_var.js_get()} == {i}) {{\n', ),
+                        (hook.js_detach(f'{current_clause_var.js()}.attachment_{i}_var_{hook.get_name()}') + '\n' \
+                        for hook in hooks),
+                        ('}\n', )
+                    )
+                    for i, hooks in enumerate(all_hooks)
+                ) ) + \
+                '\n}\n'
+            
+            return script
 
     def __init__(self, nodelist: template.NodeList):
         super().__init__(nodelist=nodelist)
