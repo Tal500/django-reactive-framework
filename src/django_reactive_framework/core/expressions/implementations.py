@@ -40,8 +40,10 @@ class StringExpression(Expression):
     def try_parse(expression: str) -> Optional['StringExpression']:
         if len(expression) >= 2 and expression[0] == expression[-1]:
             delimiter = expression[0]
-            if (delimiter == "'" or delimiter == '"') and (result_str := parse_string(expression, delimiter)):
-                return StringExpression(result_str)
+            if delimiter == "'" or delimiter == '"':
+                result_str = parse_string(expression, delimiter)
+                if result_str is not None:
+                    return StringExpression(result_str)
         # otherwise
         
         return None
