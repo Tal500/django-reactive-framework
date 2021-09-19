@@ -204,29 +204,33 @@ function setRadioChoice(choice) {
 }
 </script>
 
-{% #/def float_sum=initial_first_float+initial_second_float %}
+{% #/def first_float=initial_first_float %}
+{% #/def second_float=initial_second_float %}
+{% #/def float_operation='add' %}
+
 <section style="padding-top: 5px;">
-You may add two decimal numbers below:
-<form id="float_sum_form">
-<input type="number" id="first_float_input" value="{{initial_first_float}}" step="0.1" oninput="updateFloatSum();" />
+<form id="float_calc_form">
+You may
+<select id="float_operation_select" onchange="{% #set float_operation %}document.getElementById('float_operation_select').value{% /set %}">
+    <option value="add" onchange="{% #/set float_operation='add' %}" selected>Add (+)</option>
+    <option value="substruct" onchange="{% #/set float_operation='substruct' %}">Substruct (-)</option>
+    <option value="multiply" onchange="{% #/set float_operation='multiply' %}">Multiply (*)</option>
+    <option value="divide" onchange="{% #/set float_operation='divide' %}">Divide (/)</option>
+</select>
+two decimal numbers below:
+<input type="number" id="first_float_input" value="{{initial_first_float}}" step="0.1" oninput="{% #set first_float %}parseFloat(first_float_input.value){% /set %}" />
 +
-<input type="number" id="second_float_input" value="{{initial_second_float}}" step="0.1" oninput="updateFloatSum();" />
+<input type="number" id="second_float_input" value="{{initial_second_float}}" step="0.1" oninput="{% #set second_float %}parseFloat(second_float_input.value){% /set %}" />
 =
-{%#%}<span>{% #/print float_sum %}</span>{%/%}
+{%#%}<span>{% #/print float_operation==='add'?(first_float + second_float):(float_operation==='substruct'?(first_float - second_float):(float_operation==='multiply'?(first_float * second_float):(float_operation==='divide'?(first_float / second_float):'Error'))) %}</span>{%/%}
 </form>
 </section>
 
 <script>
-document.getElementById("float_sum_form").reset();
+document.getElementById("float_calc_form").reset();
 
 const first_float_input = document.getElementById("first_float_input");
 const second_float_input = document.getElementById("second_float_input");
-
-function updateFloatSum() {
-    const first = parseFloat(first_float_input.value); 
-    const second = parseFloat(second_float_input.value);
-    {% #set float_sum %}first + second{% /set %}
-}
 
 </script>
 

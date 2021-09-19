@@ -191,3 +191,42 @@ class SumOperator(ReactiveBinaryOperator):
         return '+'.join(js_expressions)
 
 ReactiveBinaryOperator.operators['+'] = SumOperator()
+
+class SubstructOperator(ReactiveBinaryOperator):
+    def eval_initial_from_values(self, vals: List['ReactValType']) -> 'ReactValType':
+        result = vals[0]
+        for val in vals[1:]:
+            result -= val
+        
+        return result
+
+    def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
+        return '-'.join(js_expressions)
+
+ReactiveBinaryOperator.operators['-'] = SubstructOperator()
+
+class MultiplyOperator(ReactiveBinaryOperator):
+    def eval_initial_from_values(self, vals: List['ReactValType']) -> 'ReactValType':
+        result = vals[0]
+        for val in vals[1:]:
+            result *= val
+        
+        return result
+
+    def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
+        return '*'.join(js_expressions)
+
+ReactiveBinaryOperator.operators['*'] = MultiplyOperator()
+
+class DivideOperator(ReactiveBinaryOperator):
+    def eval_initial_from_values(self, vals: List['ReactValType']) -> 'ReactValType':
+        result = vals[0]
+        for val in vals[1:]:
+            result /= val
+        
+        return result
+
+    def eval_js_from_js(self, js_expressions: List[str], delimiter: str) -> str:
+        return '/'.join(js_expressions)
+
+ReactiveBinaryOperator.operators['/'] = DivideOperator()
