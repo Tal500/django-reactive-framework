@@ -71,10 +71,12 @@ class IntExpression(Expression):
     
     @staticmethod
     def try_parse(expression: str) -> Optional['IntExpression']:
-        if expression.isnumeric():
-            return IntExpression(int(expression))
-        else:
+        try:
+            number = int(expression)
+        except ValueError:
             return None
+        
+        return IntExpression(number)
 
 class BoolExpression(Expression):
     def __init__(self, val: bool):
