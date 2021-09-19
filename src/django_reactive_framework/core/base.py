@@ -326,13 +326,13 @@ class ReactContext:
                 result: ResorceScript = context.render_script(subsubtree)
 
                 if result.initial_pre_calc:
-                    initial_pre_calc_scripts.append(f'( () => {{ {result.initial_pre_calc} }} )();')
+                    initial_pre_calc_scripts.append(result.initial_pre_calc)
 
                 if result.initial_post_calc:
-                    initial_post_calc_scripts.append(f'( () => {{ {result.initial_post_calc} }} )();')
+                    initial_post_calc_scripts.append(result.initial_post_calc)
 
                 if result.destructor:
-                    destructor_scripts.append(f'( () => {{ {result.destructor} }} )();')
+                    destructor_scripts.append(result.destructor)
             else:
                 raise Exception("All element of the internal subtree must be scripts or pairs of form (ReactContext, subsubtree)!")
 
