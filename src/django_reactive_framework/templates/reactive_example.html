@@ -159,7 +159,7 @@ The original equation was: 2+{% #/print present(number) %}={% #/print present(su
 {% #/def result_choice='number_sum' %}
 {% #/def some_result=(result_choice==='number_sum')?(2+number):greeting+" "+"World" %}
 
-<p>
+<section style="padding-top: 5px;">
 Using the set tag (and the present function to avoid self referencing),
 we may chose which result to show, with keeping tracking of the result without setting it repeatedly:<br />
 <form>
@@ -182,7 +182,7 @@ Result: {% #/print some_result %}
 </span>
 {%/%}
 
-</p>
+</section>
 
 <script>
 function update_number() {
