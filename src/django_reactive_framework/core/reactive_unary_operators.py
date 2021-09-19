@@ -42,4 +42,18 @@ class LogicalNotOperator(ReactiveUnaryOperator):
 
 ReactiveUnaryOperator.operators['!'] = LogicalNotOperator()
 
+class MinusOperator(ReactiveUnaryOperator):
+    def eval_initial_from_value(self, val: ReactValType) -> ReactValType:
+        if not (isinstance(val, int) or isinstance(val, float)):
+            raise template.TemplateSyntaxError('Cannot do minus for non-number values. ' + \
+                f'value: {val}')
+        # otherwise
+
+        return -val
+
+    def eval_js_from_js(self, js_expressions: str, delimiter: str) -> str:
+        return f'-{js_expressions}'
+
+ReactiveUnaryOperator.operators['-'] = MinusOperator()
+
 from .expressions import *

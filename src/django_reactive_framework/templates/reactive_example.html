@@ -208,7 +208,7 @@ function setRadioChoice(choice) {
 {% #/def second_float=initial_second_float %}
 {% #/def float_operation='add' %}
 
-<section style="padding-top: 5px;">
+<section style="padding-top: 15px;">
 <form id="float_calc_form">
 You may
 <select id="float_operation_select" onchange="{% #set float_operation %}document.getElementById('float_operation_select').value{% /set %}">
@@ -216,17 +216,20 @@ You may
     <option value="substruct" onchange="{% #/set float_operation='substruct' %}">Substruct (-)</option>
     <option value="multiply" onchange="{% #/set float_operation='multiply' %}">Multiply (*)</option>
     <option value="divide" onchange="{% #/set float_operation='divide' %}">Divide (/)</option>
+    <option value="minus" onchange="{% #/set float_operation='minus' %}">Minus (-)</option>
 </select>
-two decimal numbers below:
+{%#%}<span>{% #if float_operation==='minus' %}a decimals number{% :else %}two decimals numbers{% /if %}</span>{%/%} below:<br />
 <input type="number" id="first_float_input" value="{{initial_first_float}}" step="0.1" oninput="{% #set first_float %}parseFloat(first_float_input.value){% /set %}" />
 {%#%}
-<span>
+<span style=("display: "+(float_operation==='minus'?'none':'inline')+";")>
 {% #/print float_operation==='add'?'+':(float_operation==='substruct'?'-':(float_operation==='multiply'?'*':(float_operation==='divide'?'/':'Error'))) %}
 </span>
 {%/%}
-<input type="number" id="second_float_input" value="{{initial_second_float}}" step="0.1" oninput="{% #set second_float %}parseFloat(second_float_input.value){% /set %}" />
+{%#%}
+<input type="number" id="second_float_input" value=initial_second_float step="0.1" style=("display: "+(float_operation==='minus'?'none':'inline')+";") oninput="update_second_float()" />
+{%/%}
 =
-{%#%}<span>{% #/print float_operation==='add'?(first_float + second_float):(float_operation==='substruct'?(first_float - second_float):(float_operation==='multiply'?(first_float * second_float):(float_operation==='divide'?(first_float / second_float):'Error'))) %}</span>{%/%}
+{%#%}<span>{% #/print float_operation==='add'?(first_float + second_float):(float_operation==='substruct'?(first_float - second_float):(float_operation==='multiply'?(first_float * second_float):(float_operation==='divide'?(first_float / second_float):(float_operation==='minus'?(-first_float):'Error')))) %}</span>{%/%}
 </form>
 </section>
 
@@ -236,11 +239,15 @@ document.getElementById("float_calc_form").reset();
 const first_float_input = document.getElementById("first_float_input");
 const second_float_input = document.getElementById("second_float_input");
 
+function update_second_float() {
+    {% #set second_float %}parseFloat(second_float_input.value){% /set %}
+}
+
 </script>
 
 {% #/def test_json={v1: '2', 'v7': '3', nested: {A: 1, B: 2}, arr: [{a:1, b:2}, {c: 3}]} %}
 
-{% #tag section %}
+{% #tag section style="padding-top: 15px;" %}
 You can also use JSON/dictionary values:
 <p>
 {% #/print test_json %}
