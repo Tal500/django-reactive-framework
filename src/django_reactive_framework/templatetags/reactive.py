@@ -1107,12 +1107,12 @@ class ReactIfNode(ReactNode):
                 'const __reactive_clause_post_scripts = ' + \
                     f'[{",".join(f"function(){{{script.initial_post_calc}}}" for script in scripts)}];\n' + \
                 f'{current_clause_var.js()}.attachment_main = ' + \
-                    current_clause_var.js_attach('__reactive_reset_content', True) + '\n' + \
+                    current_clause_var.js_attach('__reactive_reset_content', False) + '\n' + \
                 ''.join(chain.from_iterable(
                     chain(
                         (f'{"else " if i > 0  else ""}if ({current_clause_var.js_get()} == {i}) {{\n', ),
                         (f'{current_clause_var.js()}.attachment_{i}_var_{hook.get_name()} = ' + \
-                        hook.js_attach('__reactive_reset_content', True) + ';\n'
+                        hook.js_attach('__reactive_reset_content', False) + ';\n'# TODO: It should be True, but causes infinite recursion (also above)
                         for hook in hooks),
                         ('}\n', )
                     )
