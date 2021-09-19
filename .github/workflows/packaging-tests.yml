@@ -32,3 +32,9 @@ jobs:
     - name: Try to Install
       run: |
         pip install dist/django-reactive-framework-0.0.1.tar.gz
+    - name: Check the Module Installation by Running tests
+      run: |
+        [ -d "src" ]
+        rm -rf src
+        cd example
+        python manage.py test
