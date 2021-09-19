@@ -27,7 +27,7 @@ Loading page, and no JavaScript errors so far...
     }
 </script>
 
-{% with test_template_var="success" %}
+{% with test_template_var="success" initial_first_float=1.5 initial_second_float=2.3 %}
 
 {% #block %}
 {% #block %}
@@ -202,6 +202,32 @@ function setRadioChoice(choice) {
     choice
     {% /set %}
 }
+</script>
+
+{% #/def float_sum=initial_first_float+initial_second_float %}
+<section style="padding-top: 5px;">
+You may add two decimal numbers below:
+<form id="float_sum_form">
+<input type="number" id="first_float_input" value="{{initial_first_float}}" step="0.1" oninput="updateFloatSum();" />
++
+<input type="number" id="second_float_input" value="{{initial_second_float}}" step="0.1" oninput="updateFloatSum();" />
+=
+{%#%}<span>{% #/print float_sum %}</span>{%/%}
+</form>
+</section>
+
+<script>
+document.getElementById("float_sum_form").reset();
+
+const first_float_input = document.getElementById("first_float_input");
+const second_float_input = document.getElementById("second_float_input");
+
+function updateFloatSum() {
+    const first = parseFloat(first_float_input.value); 
+    const second = parseFloat(second_float_input.value);
+    {% #set float_sum %}first + second{% /set %}
+}
+
 </script>
 
 {% #/def test_json={v1: '2', 'v7': '3', nested: {A: 1, B: 2}, arr: [{a:1, b:2}, {c: 3}]} %}

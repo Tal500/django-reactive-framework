@@ -71,12 +71,48 @@ class IntExpression(Expression):
     
     @staticmethod
     def try_parse(expression: str) -> Optional['IntExpression']:
+        if '.' in expression:
+            return None# It might be float
+        # otherwise
+
         try:
             number = int(expression)
         except ValueError:
             return None
         
         return IntExpression(number)
+
+class FloatExpression(Expression):
+    def __init__(self, val: float):
+        self.val = val
+    
+    def __str__(self) -> str:
+        return f'{self.val}'
+    
+    @property
+    def constant(self) -> bool:
+        return True
+    
+    def reduce(self, template_context: template.Context):
+        return self
+    
+    def eval_initial(self, react_context: Optional['ReactContext']) -> float:
+        return self.val
+
+    def eval_js_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
+        return str(self.val), []
+
+    def eval_js_html_output_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
+        return f'{delimiter}{self.val}{delimiter}', []
+    
+    @staticmethod
+    def try_parse(expression: str) -> Optional['FloatExpression']:
+        try:
+            number = float(expression)
+        except ValueError:
+            return None
+        
+        return FloatExpression(number)
 
 class BoolExpression(Expression):
     def __init__(self, val: bool):
@@ -819,6 +855,8 @@ def parse_expression(expression: str):
     elif exp := BoolExpression.try_parse(expression):
         return exp
     elif exp := IntExpression.try_parse(expression):
+        return exp
+    elif exp := FloatExpression.try_parse(expression):
         return exp
     elif exp := NoneExpression.try_parse(expression):
         return exp

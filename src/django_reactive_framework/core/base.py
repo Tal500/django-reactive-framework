@@ -31,6 +31,8 @@ def value_to_expression(val):
         return BoolExpression(val)
     elif isinstance(val, int):
         return IntExpression(val)
+    elif isinstance(val, float):
+        return FloatExpression(val)
     elif val is None:
         return NoneExpression()
     elif isinstance(val, list):
@@ -39,7 +41,7 @@ def value_to_expression(val):
         return DictExpression({str(key): value_to_expression(_val) for key, _val in val.items()})
     else:
         raise template.TemplateSyntaxError(
-            "Currently the only types supported are string, bool and int for reactive variables values.")
+            "Currently the only types supported are string, bool, int, float, none, arrays and dictionaries for reactive variables values.")
 
 # One may be attempt to think that react_context is useless, but it's not since ReactData is a valid value.
 def value_js_representation(val: 'ReactValType', react_context: 'ReactContext', delimiter: str = sq):
@@ -62,7 +64,7 @@ class ReactHook:
     def js_detach(self, js_attachment: str) -> str:
         pass
 
-ReactValType = Union[str, bool, int, None, List['ReactValType'], Dict[str, 'ReactValType'], 'ReactData']
+ReactValType = Union[str, bool, int, float, None, List['ReactValType'], Dict[str, 'ReactValType'], 'ReactData']
 class ReactData(ReactHook):
     def __init__(self, expression: 'Expression'):
         self.expression = expression
