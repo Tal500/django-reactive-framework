@@ -219,7 +219,11 @@ You may
 </select>
 two decimal numbers below:
 <input type="number" id="first_float_input" value="{{initial_first_float}}" step="0.1" oninput="{% #set first_float %}parseFloat(first_float_input.value){% /set %}" />
-+
+{%#%}
+<span>
+{% #/print float_operation==='add'?'+':(float_operation==='substruct'?'-':(float_operation==='multiply'?'*':(float_operation==='divide'?'/':'Error'))) %}
+</span>
+{%/%}
 <input type="number" id="second_float_input" value="{{initial_second_float}}" step="0.1" oninput="{% #set second_float %}parseFloat(second_float_input.value){% /set %}" />
 =
 {%#%}<span>{% #/print float_operation==='add'?(first_float + second_float):(float_operation==='substruct'?(first_float - second_float):(float_operation==='multiply'?(first_float * second_float):(float_operation==='divide'?(first_float / second_float):'Error'))) %}</span>{%/%}
