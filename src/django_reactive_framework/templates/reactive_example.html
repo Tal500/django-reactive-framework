@@ -227,6 +227,11 @@ You may
     <option value="minus" onchange="{% #/set float_operation='minus' %}">Minus (-)</option>
 </select>
 {%#%}<span>{% #if float_operation==='minus' %}a decimals number{% :else %}two decimals numbers{% /if %}</span>{%/%} below:<br />
+{%#%}
+<span style=("display: "+(float_operation==='minus'?'inline':'none')+";")>
+-
+</span>
+{%/%}
 <input type="number" id="first_float_input" value="{{initial_first_float}}" step="0.1" oninput="{% #set first_float %}parseFloat(first_float_input.value){% /set %}" />
 {%#%}
 <span style=("display: "+(float_operation==='minus'?'none':'inline')+";")>
