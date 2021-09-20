@@ -311,10 +311,12 @@ class ReactTagNode(ReactNode):
                 '// Tag post calc\n' + \
                 'var __reactive_block_reset = true;\n' + \
                 'var __reactive_need_reset = false;\n' + \
+                'var __reactive_had_reset = false;\n' + \
                 'function __reactive_reset_content() {\n' + \
                     'if (__reactive_block_reset) { __reactive_need_reset=true; return;};\n' + \
                     '__reactive_block_reset = true;\n' + \
                     '__reactive_need_reset = false;\n' + \
+                    '__reactive_had_reset = true;\n' + \
                     f'{control_var.js_get()}.inner_destructor();\n' + \
                     script.initial_pre_calc + '\n' + \
                     (f'document.getElementById({id_js_expression}).innerHTML = ' + js_rerender_expression + ';\n'
@@ -326,9 +328,9 @@ class ReactTagNode(ReactNode):
                 f'{control_var.js_get()}.inner_post = function() {{\n{script.initial_post_calc}\n}};\n' + \
                 f'{control_var.js_get()}.inner_destructor = function() {{\n{script.destructor}\n}};\n' + \
                 '\n'.join(chain.from_iterable((f'{control_var.js_get()}.attachment_attribute_{attribute}_var_{hook.get_name()} = ' + \
-                hook.js_attach(change_attribute(id_js_expression, attribute, js_cond_exp, js_vaL_exp), True) + ';' \
+                hook.js_attach(change_attribute(id_js_expression, attribute, js_cond_exp, js_val_exp), True) + ';' \
                 for hook in _hooks) \
-                for attribute, (js_cond_exp, js_vaL_exp, _hooks) in all_attributes_js_expressions_and_hooks.items())) + \
+                for attribute, (js_cond_exp, js_val_exp, _hooks) in all_attributes_js_expressions_and_hooks.items())) + \
                 '\n' + \
                 f'{control_var.js_get()}.inner_post();\n' + \
                 '__reactive_block_reset = false;\n' + \
@@ -451,6 +453,46 @@ def do_reacttag(parser: template.base.Parser, token: template.base.Token):
         parser.delete_first_token()
 
     return parse_reacttag_internal(html_tag, remaining_bits, nodelist)
+
+class ReactScriptNode(ReactNode):
+    tag_name = 'script'
+
+    class Context(ReactRerenderableContext):
+        def __init__(self, parent):
+            super().__init__(id='', parent=parent, fully_reactive=True)
+
+        def render_html(self, subtree: List) -> str:
+            return ''
+
+        def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
+            return '', []
+        
+        def render_script(self, subtree: Optional[List]) -> ResorceScript:
+            js_script = self.render_html_inside(subtree)
+            return ResorceScript(initial_post_calc=js_script)
+    
+    def __init__(self, nodelist: template.NodeList):
+        super().__init__(nodelist=nodelist)
+    
+    def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
+        return ReactScriptNode.Context(parent_context)
+
+@register.tag('#' + ReactScriptNode.tag_name)
+def do_reactscript(parser: template.base.Parser, token: template.base.Token):
+    bits = tuple(smart_split(token.contents, whitespaces, common_delimiters))
+    bits_after = bits[1:]
+
+    var_def = tuple(split_kwargs(bits_after))
+
+    if len(var_def) != 1 or (var_def[0][1] is None):
+        raise template.TemplateSyntaxError(
+            "%r tag requires exactly one aurgument in the form of {name}={val}" % token.contents.split()[0]
+        )
+    # otherwise
+
+    var_name, var_val_expression = var_def[0]
+
+    return ReactScriptNode(var_name, parse_expression(var_val_expression))
 
 @register.tag('#')
 def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
@@ -1107,12 +1149,12 @@ class ReactIfNode(ReactNode):
                 'const __reactive_clause_post_scripts = ' + \
                     f'[{",".join(f"function(){{{script.initial_post_calc}}}" for script in scripts)}];\n' + \
                 f'{current_clause_var.js()}.attachment_main = ' + \
-                    current_clause_var.js_attach('__reactive_reset_content', False) + '\n' + \
+                    current_clause_var.js_attach('__reactive_reset_content', '!__reactive_had_reset') + '\n' + \
                 ''.join(chain.from_iterable(
                     chain(
                         (f'{"else " if i > 0  else ""}if ({current_clause_var.js_get()} == {i}) {{\n', ),
                         (f'{current_clause_var.js()}.attachment_{i}_var_{hook.get_name()} = ' + \
-                        hook.js_attach('__reactive_reset_content', False) + ';\n'# TODO: It should be True, but causes infinite recursion (also above)
+                        hook.js_attach('__reactive_reset_content', '!__reactive_had_reset') + ';\n'
                         for hook in hooks),
                         ('}\n', )
                     )
