@@ -165,12 +165,12 @@ we may chose which result to show, with keeping tracking of the result without s
 <form>
 
 <label>
-    <input type="radio" name="result_choice" value="number_sum" checked onchange="setRadioChoice('number_sum')" />
+    <input type="radio" name="result_choice" id="result_choice_sum" value="number_sum" checked onchange="setRadioChoice('number_sum')" />
     Show Number Sum
 </label>
 <br />
 <label>
-    <input type="radio" name="result_choice" value="str_concat" onchange="setRadioChoice('str_concat')" />
+    <input type="radio" name="result_choice" id="result_choice_concat" value="str_concat" onchange="setRadioChoice('str_concat')" />
     Show String Concatenation
 </label>
 
@@ -201,6 +201,14 @@ function setRadioChoice(choice) {
     {% #set result_choice %}
     choice
     {% /set %}
+}
+
+const result_choice_sum = document.getElementById('result_choice_sum');
+const result_choice_concat = document.getElementById('result_choice_concat');
+if (result_choice_sum.checked) {
+    setRadioChoice(result_choice_sum.value);
+} else if (result_choice_concat.checked) {
+    setRadioChoice(result_choice_concat.value);
 }
 </script>
 
