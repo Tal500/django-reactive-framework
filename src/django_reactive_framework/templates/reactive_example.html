@@ -35,11 +35,13 @@ Test1
 {% #/def text_dsadf=test_template_var %}
 {% #/def test_var = 'test' %}
 {% #/def test_array= ['str1', 'str2', 'str3'] %}
+{%#%}
 <script>
 {% #set test_var %}
 {% #/get test_var %} + '11'
 {% /set %}
 </script>
+{%/%}
 Test2
 {% #element span %}
 {% #/def nested_var ='nested' %}
@@ -81,6 +83,7 @@ Test4
 Comment test
 {% endcomment %}
 
+{%#%}
 <script>
 {%#redo%}
 console.log({% #/get test_var %});
@@ -107,6 +110,7 @@ setTimeout(
     {% /set %}
     }, 1000);
 </script>
+{%/%}
 
 <section>
 Fixed array:
@@ -183,6 +187,12 @@ Result: {% #/print some_result %}
 {%/%}
 
 {% #script %}
+function setRadioChoice(choice) {
+    {% #set result_choice %}
+    choice
+    {% /set %}
+}
+
 function update_number() {
     {% #/set number=present(number+1) %}
 
@@ -208,14 +218,6 @@ result_choice_concat.onchange = function () { setRadioChoice('str_concat'); };
 {% /script %}
 
 </section>
-
-<script>
-function setRadioChoice(choice) {
-    {% #set result_choice %}
-    choice
-    {% /set %}
-}
-</script>
 
 {% #/def first_float=initial_first_float %}
 {% #/def second_float=initial_second_float %}
