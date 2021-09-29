@@ -1156,11 +1156,12 @@ class ReactIfNode(ReactNode):
                 '// If post calc\n' + \
                 'const __reactive_clause_post_scripts = ' + \
                     f'[{",".join(f"function(){{{script.initial_post_calc}}}" for script in scripts)}];\n' + \
+                f'{current_clause_var.js()}.last_from_post = {current_clause_var.js_get()};\n' + \
                 f'{current_clause_var.js()}.attachment_main = ' + \
                     current_clause_var.js_attach('__reactive_reset_content', '!__reactive_had_reset') + '\n' + \
                 ''.join(chain.from_iterable(
                     chain(
-                        (f'{"else " if i > 0  else ""}if ({current_clause_var.js_get()} == {i}) {{\n', ),
+                        (f'{"else " if i > 0  else ""}if ({current_clause_var.js()}.last_from_post == {i}) {{\n', ),
                         (f'{current_clause_var.js()}.attachment_{i}_var_{hook.get_name()} = ' + \
                         hook.js_attach('__reactive_reset_content', '!__reactive_had_reset') + ';\n'
                         for hook in hooks),
@@ -1168,8 +1169,8 @@ class ReactIfNode(ReactNode):
                     )
                     for i, hooks in enumerate(all_hooks)
                 ) ) + \
-                f'if ({current_clause_var.js_get()} !== -1) {{\n' + \
-                    f'__reactive_clause_post_scripts[{current_clause_var.js_get()}]();\n' + \
+                f'if ({current_clause_var.js()}.last_from_post !== -1) {{\n' + \
+                    f'__reactive_clause_post_scripts[{current_clause_var.js()}.last_from_post]();\n' + \
                 '}\n' + \
                 '}\n'
 
@@ -1177,13 +1178,13 @@ class ReactIfNode(ReactNode):
                 '// If destructor\n' + \
                 'const __reactive_clause_destructor_scripts = ' + \
                     f'[{",".join(f"function(){{{script.destructor}}}" for script in scripts)}];\n' + \
-                f'if ({current_clause_var.js_get()} !== -1) {{\n' + \
-                    f'__reactive_clause_destructor_scripts[{current_clause_var.js_get()}]();\n' + \
+                f'if ({current_clause_var.js()}.last_from_post !== -1) {{\n' + \
+                    f'__reactive_clause_destructor_scripts[{current_clause_var.js()}.last_from_post]();\n' + \
                 '}\n' + \
                 current_clause_var.js_detach(f'{current_clause_var.js()}.attachment_main') + '\n' + \
                 ''.join(chain.from_iterable(
                     chain(
-                        (f'{"else " if i > 0  else ""}if ({current_clause_var.js_get()} == {i}) {{\n', ),
+                        (f'{"else " if i > 0  else ""}if ({current_clause_var.js()}.last_from_post == {i}) {{\n', ),
                         (hook.js_detach(f'{current_clause_var.js()}.attachment_{i}_var_{hook.get_name()}') + '\n' \
                         for hook in hooks),
                         ('}\n', )

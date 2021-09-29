@@ -541,11 +541,6 @@ function add_below_by_first_name(first_name) {
 </script>
 {%/%}
 
-{% comment %}
-We put this reactive div as a temporary fix,
- since reactive if gets rerender too often,
- and destroys the idea about keeping states in the keyed loop (TODO: fix it)
-{% endcomment %}
 {%#%}
 <div>
 {% #if len(interactive_people_array)===0 %}
@@ -558,6 +553,7 @@ People list:
 </div>
 {%/%}
 
+{% #if len(interactive_people_array)>0 %}
 <table>
 <tr>
 <th>First Name</th>
@@ -598,6 +594,8 @@ document.getElementById('add_below_' + first_name).onclick = function () { add_b
 {% /tag %}
 {% /for %}
 </table>
+{% /if %}
+
 {% /tag %}
 
 {% /block %}
