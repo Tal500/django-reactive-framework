@@ -41,7 +41,7 @@ Test1
 {% /set %}
 </script>
 Test2
-{% #tag span %}
+{% #element span %}
 {% #/def nested_var ='nested' %}
 {% for element in example_list %}
 {{ element }}
@@ -49,22 +49,22 @@ Test2
 {% endfor %}
 {% #/print 'Test3' %}
 {% #/print nested_var %}
-{% /tag %}
+{% /element %}
 
 {% #/def test_bool=True %}
-{% #tag span %}
+{% #element span %}
 {% #/print test_bool %}
-{% /tag %}
+{% /element %}
 
-{% #tag span %}
+{% #element span %}
 {% #if test_bool %}
 Test4
 {% #/print test_var %}
 {% /if %}
-{% /tag %}
+{% /element %}
 
 {% if True %}
-{% #tag span %}
+{% #element span %}
 {% #/print test_array %}
 
 {% #for element in test_array %}
@@ -74,7 +74,7 @@ Test4
 {% #/print element3 %}
 {% /for %}
 
-{% /tag %}
+{% /element %}
 {% endif %}
 
 {% comment %}
@@ -119,7 +119,7 @@ value: {{ elemen }}
 </ul>
 </section>
 
-{% #tag section %}
+{% #element section %}
 Dynamic array: (contains {% #/print len(test_array) %} elements)
 <ul>
 {% #for element in test_array %}
@@ -128,9 +128,9 @@ value: {% #/print element %}
 </li>
 {% /for %}
 </ul>
-{% /tag %}
+{% /element %}
 
-{% #tag section %}
+{% #element section %}
 Even None is supported:
 {% #/def  test_none=None %}
 {% #/def test_null=null %}
@@ -138,23 +138,23 @@ Even None is supported:
 <li>{% #/print test_none %}</li>
 <li>{% #/print test_null %}</li>
 </ul>
-{% /tag %}
+{% /element %}
 
 {% #/def number=3 %}
 {% #/def greeting='Hi' %}
 {% #/def sum_result=2+number %}
 
-{% #tag p %}
+{% #element p %}
 You may also use plus operator, with a number that is updating every second,
 (with the present function to avoid self referencing, see in the next paragraph):<br />
 2+{% #/print number %}={% #/print sum_result %}<br />
 "{% #/print greeting %}"+" "+"World"={% #/print greeting+" "+"World" %}
-{% /tag %}
+{% /element %}
 
-{% #tag p %}
+{% #element p %}
 Using the function present(), we can print the values without trigerring rerendering:<br />
 The original equation was: 2+{% #/print present(number) %}={% #/print present(sum_result) %}<br />
-{% /tag %}
+{% /element %}
 
 {% #/def result_choice='number_sum' %}
 {% #/def some_result=(result_choice==='number_sum')?(2+number):greeting+" "+"World" %}
@@ -269,12 +269,12 @@ second_float_input.oninput= function () { {% #set second_float %}parseFloat(seco
 
 {% #/def test_json={v1: '2', 'v7': '3', nested: {A: 1, B: 2}, arr: [{a:1, b:2}, {c: 3}]} %}
 
-{% #tag section style="padding-top: 15px;" %}
+{% #element section style="padding-top: 15px;" %}
 You can also use JSON/dictionary values:
 <p>
 {% #/print test_json %}
 </p>
-{% /tag %}
+{% /element %}
 
 <script>
 setTimeout(
@@ -291,7 +291,7 @@ setTimeout(
 
 {% #/def people=[{first: 'John', last: 'Smith', age: 40},{first: 'Kristen', last: 'Perkins', age: 27}] %}
 
-{% #tag section %}
+{% #element section %}
 You may even render a table using an array of dictionary:
 <table>
 <tr>
@@ -300,14 +300,14 @@ You may even render a table using an array of dictionary:
 <th>Age</th>
 </tr>
 {% #for person in people %}
-{% #tag tr %}
+{% #element tr %}
 <td>{% #/print person.first %}</td>
 <td>{% #/print person.last %}</td>
 <td>{% #/print person.age %}</td>
-{% /tag %}
+{% /element %}
 {% /for %}
 </table>
-{% /tag %}
+{% /element %}
 
 <script>
 setTimeout(
@@ -318,18 +318,18 @@ setTimeout(
     }, 1500);
 </script>
 
-{% #tag section %}
+{% #element section %}
 You can have a tag inside another tag:
 Test var array is: {% #/print test_array %}
-{% #tag div style="color: red;" %}
+{% #element div style="color: red;" %}
 Test var value is: {% #/print test_var %}
-{% /tag %}
-{% /tag %}
+{% /element %}
+{% /element %}
 
 
 {% #/def nested_array=[[1,2,3],[11,12,13],[21,22,23]] %}
 
-{% #tag div style="padding-top: 5px;" %}
+{% #element div style="padding-top: 5px;" %}
 And also a for inside another for loop:
 
 <ul>
@@ -346,7 +346,7 @@ The {% #/print array %} is listed:
 </li>
 {% /for %}
 </ul>
-{% /tag %}
+{% /element %}
 
 <script>
 setTimeout(
@@ -406,20 +406,20 @@ setTimeout(changeColorStep, 1000);
 {% /block %}
 
 
-{% #tag div style="padding-top: 5px;" %}
+{% #element div style="padding-top: 5px;" %}
 You can also have a keyed for loop:
 {% #for element in test_array by element %}
-{% #tag p %}
+{% #element p %}
 {% #/print element %}
-{% /tag %}
+{% /element %}
 {% /for %}
-{% /tag %}
+{% /element %}
 
 {% #/def interactive_people_array=[{first:'John',last:'Smith',age: 40}] %}
 
 {% #/def disable_insertion=False %}
 
-{% #tag div style="padding-top: 5px;" %}
+{% #element div style="padding-top: 5px;" %}
 Or even a more advanced one:
 (make sure that first names are unique, or else you'll have an error)
 
@@ -429,8 +429,8 @@ Or even a more advanced one:
 <form id="add_person_form">
 New person:
 {% comment%}An example for self enclosed tags{% endcomment %}
-{% #/tag input/ type = "text" id="first_name" %}
-{% #/tag input type ="text" id= "last_name" / %}
+{% #/element input/ type = "text" id="first_name" %}
+{% #/element input type ="text" id= "last_name" / %}
 {%#%}<input type="number"
 id="age" required/>{%/%}
 {%#%}<input type="submit" value="Insert to the End" disabled?disable_insertion />{%/%}
@@ -563,10 +563,10 @@ People list:
 <th>Actions</th>
 </tr>
 {% #for person in interactive_people_array by person.first %}
-{% #tag tr %}
-{% #tag td %}{% #/print person.first %}{% /tag %}
-{% #tag td %}{% #/print person.last %}{% /tag %}
-{% #tag td %}{% #/print person.age %}{% /tag %}
+{% #element tr %}
+{% #element td %}{% #/print person.first %}{% /element %}
+{% #element td %}{% #/print person.last %}{% /element %}
+{% #element td %}{% #/print person.age %}{% /element %}
 <td>
 <form>
 <input type="text" placeholder="Notes" />
@@ -591,12 +591,12 @@ document.getElementById('add_below_' + first_name).onclick = function () { add_b
 </script>
 {%/%}
 
-{% /tag %}
+{% /element %}
 {% /for %}
 </table>
 {% /if %}
 
-{% /tag %}
+{% /element %}
 
 {% /block %}
 {% /block %}

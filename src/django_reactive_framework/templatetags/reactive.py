@@ -122,8 +122,8 @@ def do_reactdef(parser: template.base.Parser, token: template.base.Token):
 
     return ReactDefNode(var_name, parse_expression(var_val_expression))
 
-class ReactTagNode(ReactNode):
-    tag_name = 'tag'
+class ReactElementNode(ReactNode):
+    tag_name = 'element'
 
     class RenderData(ReactRerenderableContext):
         def __init__(self, parent: ReactContext, id: str, self_enclosed: bool, html_tag: str,
@@ -136,7 +136,7 @@ class ReactTagNode(ReactNode):
             self.html_attributes: Dict[str, Tuple[Optional[Expression], Optional[Expression]]] = html_attributes
     
         def var_js(self, var):
-            return f'{var.name}_tag{self.id}'
+            return f'{var.name}_element{self.id}'
         
         def compute_attributes(self) -> Dict[str, Tuple[Optional[Expression], Optional[Expression]]]:
             computed_attributes = dict(self.html_attributes)
@@ -150,7 +150,7 @@ class ReactTagNode(ReactNode):
                     path_id_expressions.append(current.id_prefix_expression())
                     current = current.parent
                 
-                path_id_expressions.append(StringExpression('react_html_tag_'))
+                path_id_expressions.append(StringExpression('react_html_element_'))
                 
                 path_id_expressions.reverse()
 
@@ -233,7 +233,7 @@ class ReactTagNode(ReactNode):
         def set_attribute_js_expression(self, element_js: str, attribute: str,
             js_cond_exp: Optional[str], js_val_exp: Optional[str]) -> str:
 
-            if attribute == 'checked':# TODO: Make this exception only for 'input' tags
+            if attribute == 'checked':# TODO: Make this exception only for 'input' elements
                 if js_val_exp is not None:
                     raise template.TemplateSyntaxError(
                         'Error: \'checked\' attribute can have no value other than empty or "checked"')
@@ -308,7 +308,7 @@ class ReactTagNode(ReactNode):
             # TODO: Handle the unsupported style and events setting in old IE versions?
             
             script.initial_post_calc = '( () => {\n' + \
-                '// Tag post calc\n' + \
+                '// Element post calc\n' + \
                 'var __reactive_block_reset = true;\n' + \
                 'var __reactive_need_reset = false;\n' + \
                 'var __reactive_had_reset = false;\n' + \
@@ -340,7 +340,7 @@ class ReactTagNode(ReactNode):
                 '\n})();'
 
             script.destructor = '( () => {\n' + \
-                '// Tag destructor\n' + \
+                '// Element destructor\n' + \
                 '\n'.join((hook.js_detach(f'{control_var.js_get()}.attachment_content_{hook.get_name()}') for hook in hooks)) + \
                 '\n' + \
                 '\n'.join(chain.from_iterable(
@@ -363,7 +363,7 @@ class ReactTagNode(ReactNode):
         super().__init__(nodelist=nodelist)
     
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
-        id = f'tag_{next_id_by_context(template_context, "__react_tag")}'
+        id = f'element_{next_id_by_context(template_context, "__react_element")}'
 
         def reduce_attribute_expressions(expressions: Tuple[Optional[Expression], Optional[Expression]]) -> \
             Tuple[Optional[Expression], Optional[Expression]]:
@@ -379,9 +379,9 @@ class ReactTagNode(ReactNode):
         parsed_html_attributes = {key: reduce_attribute_expressions(expressions) for
             key, expressions in self.html_attributes.items()}
 
-        return ReactTagNode.RenderData(parent_context, id, self.self_enclosed, self.html_tag, parsed_html_attributes)
+        return ReactElementNode.RenderData(parent_context, id, self.self_enclosed, self.html_tag, parsed_html_attributes)
 
-def parse_reacttag_internal(html_tag: str, bits_after: List[str], nodelist: template.NodeList):
+def parse_reactelement_internal(html_tag: str, bits_after: List[str], nodelist: template.NodeList):
     html_attributes_unparsed = split_kwargs(bits_after)
 
     def parse_attribute(attribute_unparsed: Tuple[str, Optional[str]]) -> \
@@ -415,10 +415,10 @@ def parse_reacttag_internal(html_tag: str, bits_after: List[str], nodelist: temp
     
     self_enclosed = (nodelist is None)
 
-    return ReactTagNode(nodelist, self_enclosed, html_tag, html_attributes)
+    return ReactElementNode(nodelist, self_enclosed, html_tag, html_attributes)
 
-@register.tag('#' + ReactTagNode.tag_name)
-@register.tag('#/' + ReactTagNode.tag_name)
+@register.tag('#' + ReactElementNode.tag_name)
+@register.tag('#/' + ReactElementNode.tag_name)
 def do_reacttag(parser: template.base.Parser, token: template.base.Token):
 
     bits = list(smart_split(token.contents, whitespaces, common_delimiters))
@@ -444,15 +444,15 @@ def do_reacttag(parser: template.base.Parser, token: template.base.Token):
 
     if tag.startswith('#/') != self_enclosed:
         raise template.TemplateSyntaxError('You need to use #/ instead of # on tag if and only if ' + \
-            'the html tag is self enclosed (i.e. ended with / in html tag name or at the last aurgument list).')
+            'the html element is self enclosed (i.e. ended with / in html tag name or at the last aurgument list).')
     
     if self_enclosed:
         nodelist = None
     else:
-        nodelist = parser.parse(('/' + ReactTagNode.tag_name,))
+        nodelist = parser.parse(('/' + ReactElementNode.tag_name,))
         parser.delete_first_token()
 
-    return parse_reacttag_internal(html_tag, remaining_bits, nodelist)
+    return parse_reactelement_internal(html_tag, remaining_bits, nodelist)
 
 class ReactScriptNode(ReactNode):
     tag_name = 'script'
@@ -540,7 +540,7 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
     start_bits = list(smart_split(start_parts[0], whitespaces))
     if not start_bits:
         raise template.TemplateSyntaxError(
-            'The first tag <...> is empty inside a reactive generic block {% # %}...{% / %}'
+            'The first HTML element tag <...> is empty inside a reactive generic block {% # %}...{% / %}'
             )
 
     html_tag = start_bits[0]
@@ -554,7 +554,7 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
     start_seperated_by_slash = list(smart_split(start_parts[0], ['/'], skip_blank=False))
     if len(start_seperated_by_slash) > 2:
         raise template.TemplateSyntaxError(
-            'Found more than one slash (\'/\') in start tag <..> while parsimg a reactive generic block {% # %}...{% / %}'
+            'Found more than one slash (\'/\') in start HTML element tag <..> while parsimg a reactive generic block {% # %}...{% / %}'
             )
     elif len(start_seperated_by_slash) == 2 and not self_enclosed:
         if start_bits[-1].endswith('/'):
@@ -566,7 +566,7 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
             self_enclosed = True
         else:
             raise template.TemplateSyntaxError(
-                'Found more than one slash (\'/\') which is not in the right place in start tag <..> ' + \
+                'Found more than one slash (\'/\') which is not in the right place in start HTML element tag <..> ' + \
                 'while parsimg a reactive generic block {% # %}...{% / %}'
                 )
 
@@ -583,8 +583,8 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
     if end:
         if self_enclosed:
             raise template.TemplateSyntaxError(
-                'Found a slash (\'/\') in start tag <..> while parsimg a reactive generic block {% # %}...{% / %}, ' + \
-                'which indicate that the tag is self enclosing, but found more HTML code or or non-whitespace text after.'
+                'Found a slash (\'/\') in start HTML element tag <..> while parsimg a reactive generic block {% # %}...{% / %}, ' + \
+                'which indicate that the HTML element is self enclosing, but found more HTML code or or non-whitespace text after.'
                 )
 
         if not end.endswith('>'):
@@ -596,24 +596,24 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
         end_parts = list(smart_split(end, ['<'], skip_blank=False))
         if len(end_parts) < 2:
             raise template.TemplateSyntaxError(
-                'Missing \'<\' on the closing tag while parsimg a reactive generic block {% # %}...{% / %}'
+                'Missing \'<\' on the closing HTML element tag while parsimg a reactive generic block {% # %}...{% / %}'
                 )
         
         end_bits = list(smart_split(end_parts[-1], whitespaces))
         if not end_bits:
             raise template.TemplateSyntaxError(
-                'The first tag <...> is empty inside a reactive generic block {% # %}...{% / %}'
+                'The first HTML element tag <...> is empty inside a reactive generic block {% # %}...{% / %}'
                 )
         
         if not end_bits[0].startswith('/'):
             raise template.TemplateSyntaxError(
-                'Missing \'/\' on the start of the closing tag, while parsimg a reactive generic block {% # %}...{% / %}'
+                'Missing \'/\' on the start of the closing HTML element tag, while parsimg a reactive generic block {% # %}...{% / %}'
                 )
         
         end_seperated_by_slash = list(smart_split(end_parts[-1], ['/'], skip_blank=False))
         if len(end_seperated_by_slash) > 2:
             raise template.TemplateSyntaxError(
-                'Found more than one slash (\'/\') in closing tag </..> while parsimg a reactive generic block {% # %}...{% / %}'
+                'Found more than one slash (\'/\') in closing HTML element tag </..> while parsimg a reactive generic block {% # %}...{% / %}'
                 )
         
         end_bits[0] = end_bits[0][1:]# Remove the slash '/'
@@ -622,13 +622,13 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
         
         if len(end_bits) != 1:
             raise template.TemplateSyntaxError(
-                'There should be exactly one word after the slash (\'/\') in closing tag </..> ' + \
+                'There should be exactly one word after the slash (\'/\') in closing HTML element tag </..> ' + \
                     '(found while parsimg a reactive generic block {% # %}...{% / %})'
                 )
         
         if end_bits[0] != html_tag:
             raise template.TemplateSyntaxError(
-                f'There name of the closing tag ({end_bits[0]}) must be identical to the name of the opening tag ({html_tag}) ' + \
+                f'There name of the closing HTML element tag ({end_bits[0]}) must be identical to the name of the opening HTML element tag ({html_tag}) ' + \
                     '(found while parsimg a reactive generic block {% # %}...{% / %})'
                 )
 
@@ -637,8 +637,8 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
     else:
         if not self_enclosed:
             raise template.TemplateSyntaxError(
-                'A slash (\'/\') in start tag <..> was not found while parsimg a reactive generic block {% # %}...{% / %}, ' + \
-                'which indicate that the tag is not self enclosing, but not found more HTML code or or non-whitespace text after.'
+                'A slash (\'/\') in start HTML element tag <..> was not found while parsimg a reactive generic block {% # %}...{% / %}, ' + \
+                'which indicate that the HTML element is not self enclosing, but not found more HTML code or or non-whitespace text after.'
                 )
 
         nodelist = None
@@ -646,19 +646,19 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
     if html_tag == 'script':
         if self_enclosed:
             raise template.TemplateSyntaxError(
-                'Script interactive tag cannot be self enclosing!'
+                'Script interactive HTML element cannot be self enclosing!'
                 )
         # otherwise
 
         if len(bits) != 1:
             raise template.TemplateSyntaxError(
-                'Script interactive tag cannot have arguments!'
+                'Script interactive HTML element tag cannot have arguments!'
                 )
         # otherwise
 
         return ReactScriptNode(nodelist)
     else:
-        return parse_reacttag_internal(html_tag, bits_after, nodelist)
+        return parse_reactelement_internal(html_tag, bits_after, nodelist)
 
 class ReactForNode(ReactNode):
     tag_name = 'for'
@@ -821,7 +821,7 @@ class ReactForNode(ReactNode):
                     self.get_def(control_var, var, iteration_expression='__reactive_iter_store') \
                     for var in vars_but_iter if var is not iter_id_var)
 
-                tag_context: ReactTagNode.RenderData = subtree[0][0]
+                tag_context: ReactElementNode.RenderData = subtree[0][0]
                 tag_subtree = subtree[0][1]
 
                 computed_attributes = tag_context.compute_attributes()
@@ -1014,7 +1014,7 @@ def do_reactfor(parser: template.base.Parser, token: template.base.Token):
 
     if key_expression:
         nodelist = reduce_nodelist(nodelist)
-        if len(nodelist) != 1 and not isinstance(nodelist[0], ReactTagNode):
+        if len(nodelist) != 1 and not isinstance(nodelist[0], ReactElementNode):
             raise template.TemplateSyntaxError('Error: Keyed loops must have one one child node which is a reactive tag node.')
 
     return ReactForNode(nodelist, var_name, parse_expression(iter_expression),
