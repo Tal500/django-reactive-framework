@@ -220,11 +220,11 @@ if (result_choice_sum.checked) {
 <form id="float_calc_form">
 You may
 <select id="float_operation_select" onchange="{% #set float_operation %}document.getElementById('float_operation_select').value{% /set %}">
-    <option value="add" onchange="{% #/set float_operation='add' %}" selected>Add (+)</option>
-    <option value="substruct" onchange="{% #/set float_operation='substruct' %}">Substruct (-)</option>
-    <option value="multiply" onchange="{% #/set float_operation='multiply' %}">Multiply (*)</option>
-    <option value="divide" onchange="{% #/set float_operation='divide' %}">Divide (/)</option>
-    <option value="minus" onchange="{% #/set float_operation='minus' %}">Minus (-)</option>
+    <option value="add" selected>Add (+)</option>
+    <option value="substruct">Substruct (-)</option>
+    <option value="multiply">Multiply (*)</option>
+    <option value="divide">Divide (/)</option>
+    <option value="minus">Minus (-)</option>
 </select>
 {%#%}<span>{% #if float_operation==='minus' %}a decimals number{% :else %}two decimals numbers{% /if %}</span>{%/%} below:<br />
 {%#%}
