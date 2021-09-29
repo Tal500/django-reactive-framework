@@ -341,10 +341,11 @@ class ReactContext:
             else:
                 raise Exception("All element of the internal subtree must be scripts or pairs of form (ReactContext, subsubtree)!")
 
+        new_line = '\n'
         return ResorceScript(
-            initial_pre_calc = '\n'.join(initial_pre_calc_scripts),
-            initial_post_calc = '\n'.join(initial_post_calc_scripts),
-            destructor = '\n'.join(reversed(destructor_scripts)),
+            initial_pre_calc = f"{{{new_line.join(initial_pre_calc_scripts)}}}",
+            initial_post_calc = f"{{{new_line.join(initial_post_calc_scripts)}}}",
+            destructor = f"{{{new_line.join(reversed(destructor_scripts))}}}",
         )
     
     def render_js_and_hooks_inside(self, subtree: Optional[List]) -> Tuple[str, Iterable[ReactHook]]:
