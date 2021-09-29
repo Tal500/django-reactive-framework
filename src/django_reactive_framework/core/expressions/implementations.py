@@ -866,15 +866,15 @@ def parse_expression(expression: str):
         return exp
     elif exp := DictExpression.try_parse(expression):
         return exp
-    elif exp := VariableExpression.try_parse(expression):
-        return exp
-    elif exp := PropertyExpression.try_parse(expression):
-        return exp
     elif exp := UnaryOperatorExpression.try_parse(expression):
         return exp
     elif exp := BinaryOperatorExpression.try_parse(expression):
         return exp
     elif exp := FunctionCallExpression.try_parse(expression):
+        return exp
+    elif exp := PropertyExpression.try_parse(expression):
+        return exp
+    elif exp := VariableExpression.try_parse(expression):
         return exp
     else:
         raise template.TemplateSyntaxError(f"Can't parse expression: ({expression})")
