@@ -165,12 +165,12 @@ we may chose which result to show, with keeping tracking of the result without s
 <form>
 
 <label>
-    <input type="radio" name="result_choice" id="result_choice_sum" value="number_sum" checked onchange="setRadioChoice('number_sum')" />
+    <input type="radio" name="result_choice" id="result_choice_sum" value="number_sum" checked />
     Show Number Sum
 </label>
 <br />
 <label>
-    <input type="radio" name="result_choice" id="result_choice_concat" value="str_concat" onchange="setRadioChoice('str_concat')" />
+    <input type="radio" name="result_choice" id="result_choice_concat" value="str_concat" />
     Show String Concatenation
 </label>
 
@@ -182,9 +182,7 @@ Result: {% #/print some_result %}
 </span>
 {%/%}
 
-</section>
-
-<script>
+{% #script %}
 function update_number() {
     {% #/set number=present(number+1) %}
 
@@ -197,18 +195,25 @@ setTimeout(
     {% #set greeting %}'Hello'{% /set %}
     }, 1500);
 
-function setRadioChoice(choice) {
-    {% #set result_choice %}
-    choice
-    {% /set %}
-}
-
 const result_choice_sum = document.getElementById('result_choice_sum');
 const result_choice_concat = document.getElementById('result_choice_concat');
 if (result_choice_sum.checked) {
     setRadioChoice(result_choice_sum.value);
 } else if (result_choice_concat.checked) {
     setRadioChoice(result_choice_concat.value);
+}
+
+result_choice_sum.onchange = function () { setRadioChoice('number_sum'); };
+result_choice_concat.onchange = function () { setRadioChoice('str_concat'); };
+{% /script %}
+
+</section>
+
+<script>
+function setRadioChoice(choice) {
+    {% #set result_choice %}
+    choice
+    {% /set %}
 }
 </script>
 
@@ -219,7 +224,7 @@ if (result_choice_sum.checked) {
 <section style="padding-top: 15px;">
 <form id="float_calc_form">
 You may
-<select id="float_operation_select" onchange="{% #set float_operation %}document.getElementById('float_operation_select').value{% /set %}">
+<select id="float_operation_select">
     <option value="add" selected>Add (+)</option>
     <option value="substruct">Substruct (-)</option>
     <option value="multiply">Multiply (*)</option>
@@ -232,31 +237,35 @@ You may
 -
 </span>
 {%/%}
-<input type="number" id="first_float_input" value="{{initial_first_float}}" step="0.1" oninput="{% #set first_float %}parseFloat(first_float_input.value){% /set %}" />
+<input type="number" id="first_float_input" value="{{initial_first_float}}" step="0.1" />
 {%#%}
 <span style=("display: "+(float_operation==='minus'?'none':'inline')+";")>
 {% #/print float_operation==='add'?'+':(float_operation==='substruct'?'-':(float_operation==='multiply'?'*':(float_operation==='divide'?'/':'Error'))) %}
 </span>
 {%/%}
 {%#%}
-<input type="number" id="second_float_input" value=initial_second_float step="0.1" style=("display: "+(float_operation==='minus'?'none':'inline')+";") oninput="update_second_float()" />
+<input type="number" id="second_float_input" value=initial_second_float step="0.1" style=("display: "+(float_operation==='minus'?'none':'inline')+";") />
 {%/%}
 =
 {%#%}<span>{% #/print float_operation==='add'?(first_float + second_float):(float_operation==='substruct'?(first_float - second_float):(float_operation==='multiply'?(first_float * second_float):(float_operation==='divide'?(first_float / second_float):(float_operation==='minus'?(-first_float):'Error')))) %}</span>{%/%}
 </form>
-</section>
 
+{%#%}
 <script>
-document.getElementById("float_calc_form").reset();
+document.getElementById('float_calc_form').reset();
 
-const first_float_input = document.getElementById("first_float_input");
-const second_float_input = document.getElementById("second_float_input");
+const float_operation_select = document.getElementById('float_operation_select');
+float_operation_select.onchange = function () { {% #set float_operation %}float_operation_select.value{% /set %} };
 
-function update_second_float() {
-    {% #set second_float %}parseFloat(second_float_input.value){% /set %}
-}
+const first_float_input = document.getElementById('first_float_input');
+first_float_input.oninput= function () { {% #set first_float %}parseFloat(first_float_input.value){% /set %} };
 
+const second_float_input = document.getElementById('second_float_input');
+second_float_input.oninput= function () { {% #set second_float %}parseFloat(second_float_input.value){% /set %} };
 </script>
+{%/%}
+
+</section>
 
 {% #/def test_json={v1: '2', 'v7': '3', nested: {A: 1, B: 2}, arr: [{a:1, b:2}, {c: 3}]} %}
 
@@ -348,11 +357,20 @@ setTimeout(
     }, 1500);
 </script>
 
+{% #block %}
+
 {% #/def rand_color='rgb(0,0,255)' %}
 {% #/def changing_color=True %}
 
 <form>
-<input type="button" value="Toggle color changing" onclick="toggle_color_changing();" />
+<input id="toggle_color_button" type="button" value="Toggle color changing" />
+{% #script %}
+document.getElementById('toggle_color_button').onclick = function () {
+    {% #set changing_color %}
+    !{% #/get changing_color %}
+    {% /set %}
+};
+{% /script %}
 </form>
 
 {% # %}
@@ -366,13 +384,8 @@ This text stopped changing color!
 </div>
 {% / %}
 
+{%#%}
 <script>
-function toggle_color_changing() {
-    {% #set changing_color %}
-    !{% #/get changing_color %}
-    {% /set %}
-}
-
 function getRandomInt(min, max) {
   min = Math.ceil(min);
   max = Math.floor(max);
@@ -389,6 +402,9 @@ function changeColorStep() {
 
 setTimeout(changeColorStep, 1000);
 </script>
+{%/%}
+{% /block %}
+
 
 {% #tag div style="padding-top: 5px;" %}
 You can also have a keyed for loop:
@@ -410,7 +426,7 @@ Or even a more advanced one:
 {%#%}<div></div>{%/%}
 
 {%#%}
-<form id="add_person_form" onsubmit="insert_person_to_the_end(); return false;">
+<form id="add_person_form">
 New person:
 {% comment%}An example for self enclosed tags{% endcomment %}
 {% #/tag input/ type = "text" id="first_name" %}
@@ -418,67 +434,20 @@ New person:
 {%#%}<input type="number"
 id="age" required/>{%/%}
 {%#%}<input type="submit" value="Insert to the End" disabled?disable_insertion />{%/%}
-<input type="checkbox" id="allow_insertion_checkbox" checked onchange="change_allow_insertion();" />
+<input type="checkbox" id="allow_insertion_checkbox" checked />
 <label for="allow_insertion_checkbox">Allow Insertion</label>
 </form>
 {%/%}
 
-{% comment %}
-We put this reactive div as a temporary fix,
- since reactive if gets rerender too often,
- and destroys the idea about keeping states in the keyed loop (TODO: fix it)
-{% endcomment %}
 {%#%}
-<div>
-{% #if len(interactive_people_array)===0 %}
-People list is empty!
-{% :elif len(interactive_people_array)===1 %}
-Exactly one person in the list:
-{% :else %}
-People list:
-{% /if %}
-</div>
-{%/%}
-
-<table>
-<tr>
-<th>First Name</th>
-<th>Last Name</th>
-<th>Age</th>
-<th>Notes</th>
-<th>Actions</th>
-</tr>
-{% #for person in interactive_people_array by person.first %}
-{% #tag tr %}
-{% #tag td %}{% #/print person.first %}{% /tag %}
-{% #tag td %}{% #/print person.last %}{% /tag %}
-{% #tag td %}{% #/print person.age %}{% /tag %}
-<td>
-<form>
-<input type="text" placeholder="Notes" />
-</form>
-</td>
-<td>
-<form>
-<input type="button" value="Increase Age" onclick="increase_age_by_first_name('{% #/print person.first %}');" />
-<input type="button" value="Delete" onclick="remove_by_first_name('{% #/print person.first %}');" />
-{%#%}<input type="button" value="Add Above" disabled?disable_insertion
-onclick="add_above_by_first_name('"+person.first+"');" />{%/%}
-{%#%}<input type="button" value="Add Below" disabled?disable_insertion="disabled"
- onclick="add_below_by_first_name('"+person.first+"');" />{%/%}
-</form>
-</td>
-{% /tag %}
-{% /for %}
-</table>
-{% /tag %}
-
 <script>
+const allow_insertion_checkbox = document.getElementById('allow_insertion_checkbox');
 function change_allow_insertion() {
     {% #set disable_insertion %}
-    !document.getElementById('allow_insertion_checkbox').checked
+    !allow_insertion_checkbox.checked
     {% /set %}
 }
+allow_insertion_checkbox.onchange = change_allow_insertion;
 change_allow_insertion();
 
 function get_current_person() {
@@ -512,6 +481,9 @@ function insert_person_to_the_end() {
     {% #/get interactive_people_array %}.push(person);
     {% #/notify interactive_people_array %}
 }
+
+const add_person_form = document.getElementById("add_person_form");
+add_person_form.onsubmit = function () {insert_person_to_the_end(); return false;};
 
 function find_by_first_name(first_name) {
     for (var i = 0; i < {% #/get interactive_people_array %}.length; ++i) {
@@ -567,6 +539,66 @@ function add_below_by_first_name(first_name) {
     {% #/notify interactive_people_array %}
 }
 </script>
+{%/%}
+
+{% comment %}
+We put this reactive div as a temporary fix,
+ since reactive if gets rerender too often,
+ and destroys the idea about keeping states in the keyed loop (TODO: fix it)
+{% endcomment %}
+{%#%}
+<div>
+{% #if len(interactive_people_array)===0 %}
+People list is empty!
+{% :elif len(interactive_people_array)===1 %}
+Exactly one person in the list:
+{% :else %}
+People list:
+{% /if %}
+</div>
+{%/%}
+
+<table>
+<tr>
+<th>First Name</th>
+<th>Last Name</th>
+<th>Age</th>
+<th>Notes</th>
+<th>Actions</th>
+</tr>
+{% #for person in interactive_people_array by person.first %}
+{% #tag tr %}
+{% #tag td %}{% #/print person.first %}{% /tag %}
+{% #tag td %}{% #/print person.last %}{% /tag %}
+{% #tag td %}{% #/print person.age %}{% /tag %}
+<td>
+<form>
+<input type="text" placeholder="Notes" />
+</form>
+</td>
+<td>
+<form>
+{%#%}<input id='increase_age_of_'+person.first type="button" value="Increase Age" />{%/%}
+{%#%}<input id='delete_'+person.first type="button" value="Delete" />{%/%}
+{%#%}<input id='add_above_'+person.first type="button" value="Add Above" disabled?disable_insertion />{%/%}
+{%#%}<input id='add_below_'+person.first type="button" value="Add Below" disabled?disable_insertion="disabled" />{%/%}
+</form>
+</td>
+
+{%#%}
+<script>
+const first_name = {% #/get person.first %};
+document.getElementById('increase_age_of_' + first_name).onclick = function () { increase_age_by_first_name(first_name); };
+document.getElementById('delete_' + first_name).onclick = function () { remove_by_first_name(first_name); };
+document.getElementById('add_above_' + first_name).onclick = function () { add_above_by_first_name(first_name); };
+document.getElementById('add_below_' + first_name).onclick = function () { add_below_by_first_name(first_name); };
+</script>
+{%/%}
+
+{% /tag %}
+{% /for %}
+</table>
+{% /tag %}
 
 {% /block %}
 {% /block %}

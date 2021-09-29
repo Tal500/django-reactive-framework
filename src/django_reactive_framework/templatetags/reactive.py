@@ -480,19 +480,17 @@ class ReactScriptNode(ReactNode):
 @register.tag('#' + ReactScriptNode.tag_name)
 def do_reactscript(parser: template.base.Parser, token: template.base.Token):
     bits = tuple(smart_split(token.contents, whitespaces, common_delimiters))
-    bits_after = bits[1:]
 
-    var_def = tuple(split_kwargs(bits_after))
-
-    if len(var_def) != 1 or (var_def[0][1] is None):
+    if len(bits) != 1:
         raise template.TemplateSyntaxError(
-            "%r tag requires exactly one aurgument in the form of {name}={val}" % token.contents.split()[0]
+            "%r tag requires no aurgument!" % token.contents.split()[0]
         )
     # otherwise
 
-    var_name, var_val_expression = var_def[0]
+    nodelist = parser.parse(('/' + ReactScriptNode.tag_name,))
+    parser.delete_first_token()
 
-    return ReactScriptNode(var_name, parse_expression(var_val_expression))
+    return ReactScriptNode(nodelist)
 
 @register.tag('#')
 def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
@@ -571,11 +569,6 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
                 'Found more than one slash (\'/\') which is not in the right place in start tag <..> ' + \
                 'while parsimg a reactive generic block {% # %}...{% / %}'
                 )
-    
-    if html_tag == 'script':
-        raise template.TemplateSyntaxError(
-            'Script interactive tag is not supported!'
-            )
 
     start = start[len(start_parts[0])+1:]
     nodelist[0].s = start
@@ -649,8 +642,23 @@ def do_reactgeneric(parser: template.base.Parser, token: template.base.Token):
                 )
 
         nodelist = None
+    
+    if html_tag == 'script':
+        if self_enclosed:
+            raise template.TemplateSyntaxError(
+                'Script interactive tag cannot be self enclosing!'
+                )
+        # otherwise
 
-    return parse_reacttag_internal(html_tag, bits_after, nodelist)
+        if len(bits) != 1:
+            raise template.TemplateSyntaxError(
+                'Script interactive tag cannot have arguments!'
+                )
+        # otherwise
+
+        return ReactScriptNode(nodelist)
+    else:
+        return parse_reacttag_internal(html_tag, bits_after, nodelist)
 
 class ReactForNode(ReactNode):
     tag_name = 'for'
@@ -1324,7 +1332,7 @@ class ReactGetNode(ReactNode):
     class Context(ReactRerenderableContext):
         def __init__(self, parent, expression: Expression):
             self.expression: Expression = expression
-            super().__init__(id='', parent=parent, fully_reactive=False)
+            super().__init__(id='', parent=parent, fully_reactive=True)
 
         def render_html(self, subtree: List) -> str:
             js_expression, hooks = self.expression.eval_js_and_hooks(self)
@@ -1368,7 +1376,7 @@ class ReactSetNode(ReactNode):
         def __init__(self, parent, settable_expression: SettableExpression, val_expression: Optional[Expression]):
             self.settable_expression: SettableExpression = settable_expression
             self.val_expression: Optional[Expression] = val_expression
-            super().__init__(id='', parent=parent, fully_reactive=False)
+            super().__init__(id='', parent=parent, fully_reactive=True)
 
         def render_html(self, subtree: List) -> str:
             if self.val_expression is None:
@@ -1460,7 +1468,7 @@ class ReactNotifyNode(ReactNode):
     class Context(ReactContext):
         def __init__(self, parent, settable_expression: SettableExpression):
             self.settable_expression: SettableExpression = settable_expression
-            super().__init__(id='', parent=parent, fully_reactive=False)
+            super().__init__(id='', parent=parent, fully_reactive=True)
 
         def render_html(self, subtree: List) -> str:
             output = self.settable_expression.js_notify(self)
