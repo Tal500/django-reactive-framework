@@ -4,6 +4,8 @@ from typing import Dict, Iterable, List, Optional, Set, Union, Tuple
 from itertools import chain
 import uuid
 
+from pathlib import Path
+
 from django import template
 from django.utils.html import escapejs
 from django.utils.safestring import mark_safe
@@ -453,6 +455,10 @@ class ReactRerenderableContext(ReactContext):
         """Return a tupple of (string of rerender js expression, hooks)."""
         pass
 
+
+with open(Path(__file__).resolve().parent.parent / 'resources/reactscripts.js', 'r') as f:
+    reactive_script = f.read()
+
 class ReactNode(template.Node):
     tag_name: str = ""
 
@@ -487,6 +493,9 @@ class ReactNode(template.Node):
 
             output = current_context.render_html(subtree)
 
+            var_defs = '\n'.join(f'var {var.js()} = {var.initial_val_js(self)};'
+                for var in current_context.vars_needed_decleration())
+
             current_context.clear_render()
 
             script = current_context.render_script(subtree)
@@ -494,9 +503,11 @@ class ReactNode(template.Node):
             # Recuservly destroy all context in order to help the garbage collector
             current_context.destroy()
 
-            return output + ('<script>\n' + \
-                f'( () => {{ {script.initial_post_calc} }} )();\n' + \
-                '</script>' if script else '')
+            return output + ('<script>\n{\n' + \
+                reactive_script + '\n' + \
+                var_defs + '\n' + \
+                script.initial_post_calc + '\n' + \
+                '}\n</script>' if script else '')
         else:
             tracker: Optional[ReactTracker] = template_context.get(reacttrack_str)
 

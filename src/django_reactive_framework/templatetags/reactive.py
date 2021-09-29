@@ -3,11 +3,8 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 import itertools
 from itertools import chain
 
-from pathlib import Path
-
 from django import template
 from django.utils.safestring import mark_safe
-from django.templatetags.static import static
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
 from ..core.expressions import BinaryOperatorExpression, BoolExpression, EscapingContainerExpression, Expression, FunctionCallExpression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, TernaryOperatorExpression, VariableExpression, parse_expression
@@ -18,32 +15,17 @@ from ..core.utils import enumerate_reversed, reduce_nodelist, remove_whitespaces
 
 register = template.Library()
 
-with open(Path(__file__).resolve().parent.parent / 'resources/reactscripts.js', 'r') as f:
-    reactive_script = f.read()
-
 class ReactBlockNode(ReactNode):
     tag_name = 'block'
     class Context(ReactContext):
-        def __init__(self, parent, id: str, need_load_scripts: bool):
+        def __init__(self, parent, id: str):
             super().__init__(id=id, parent=parent)
-            self.need_load_scripts: bool = need_load_scripts
     
         def var_js(self, var):
             return f'{var.name}_{self.id}'
 
         def render_html(self, subtree: List) -> str:
-            output = self.render_html_inside(subtree)
-
-            def get_def(var: ReactVar):
-                return f'var {var.js()} = {var.initial_val_js(self)};'
-
-            if self.parent is None:# If it is the root level context
-                script = '<script>\n' + ((reactive_script + '\n') if self.need_load_scripts else '') + \
-                    '\n'.join(get_def(var) for var in self.vars_needed_decleration()) + '</script>'
-
-                return script + '\n' + output
-            else:
-                return output
+            return self.render_html_inside(subtree)
 
     def __init__(self, nodelist):
         super().__init__(nodelist=nodelist, can_be_top_level=True)
@@ -51,14 +33,7 @@ class ReactBlockNode(ReactNode):
     def make_context(self, parent_context: Optional[ReactContext], template_context: template.Context) -> ReactContext:
         id = f'block_{next_id_by_context(template_context, "__react_block")}'
         
-        reactive_scripts_are_loaded_str = 'reactive_scripts_are_loaded'
-        if template_context.get(reactive_scripts_are_loaded_str):
-            need_load_scripts = False
-        else:
-            need_load_scripts = True
-            template_context[reactive_scripts_are_loaded_str] = True
-        
-        return ReactBlockNode.Context(parent_context, id, need_load_scripts)
+        return ReactBlockNode.Context(parent_context, id)
 
 @register.tag('#' + ReactBlockNode.tag_name)
 def do_reactblock(parser, token):
