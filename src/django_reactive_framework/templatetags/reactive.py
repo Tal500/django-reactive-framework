@@ -1515,7 +1515,7 @@ class ReactRedoNode(ReactNode):
 
     class Context(ReactContext):
         def __init__(self, id: str, parent: ReactContext):
-            super().__init__(id=id, parent=parent, fully_reactive=False)
+            super().__init__(id=id, parent=parent, fully_reactive=True)
     
         def var_js(self, var):
             return f'{var.name}_script{self.id}'
