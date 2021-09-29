@@ -278,6 +278,7 @@ You can also use JSON/dictionary values:
 </p>
 {% /element %}
 
+{%#%}
 <script>
 setTimeout(
     function() {
@@ -289,6 +290,7 @@ setTimeout(
         }, 1000);
     }, 1200);
 </script>
+{%/%}
 
 
 {% #/def people=[{first: 'John', last: 'Smith', age: 40},{first: 'Kristen', last: 'Perkins', age: 27}] %}
@@ -311,6 +313,7 @@ You may even render a table using an array of dictionary:
 </table>
 {% /element %}
 
+{%#%}
 <script>
 setTimeout(
     function() {
@@ -319,6 +322,7 @@ setTimeout(
     {% #/notify people %}
     }, 1500);
 </script>
+{%/%}
 
 {% #element section %}
 You can have a tag inside another tag:
@@ -350,6 +354,7 @@ The {% #/print array %} is listed:
 </ul>
 {% /element %}
 
+{%#%}
 <script>
 setTimeout(
     function() {
@@ -358,6 +363,7 @@ setTimeout(
     {% /set %}
     }, 1500);
 </script>
+{%/%}
 
 {% #block %}
 
