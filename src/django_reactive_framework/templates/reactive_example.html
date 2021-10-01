@@ -416,7 +416,7 @@ setTimeout(changeColorStep, 1000);
 
 
 {% #element div style="padding-top: 5px;" %}
-You can also have a keyed for loop: (Notice HTML escaping)
+You can also have a keyed for loop: (notice the HTML escaping and the internal string escaping in the source code)
 {% #for element in test_array by element %}
 {% #element p %}
 {% #/print element %}
@@ -424,7 +424,7 @@ You can also have a keyed for loop: (Notice HTML escaping)
 {% /for %}
 {% /element %}
 
-{% #/def interactive_people_array=[{first:'John',last:'Smith',age: 40}, {first:'<span>Cannot fool you</span>',last:'',age: 1}] %}
+{% #/def interactive_people_array=[{first:'John',last:'Smith',age: 40}, {first:'<span>Can\'t fool you</span>',last:'',age: 1}] %}
 
 {% #/def disable_insertion=False %}
 
