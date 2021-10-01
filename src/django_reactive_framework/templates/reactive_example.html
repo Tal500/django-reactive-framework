@@ -242,7 +242,7 @@ You may
 <input type="number" id="first_float_input" value="{{initial_first_float}}" step="0.1" />
 {%#%}
 <span style=("display: "+(float_operation==='minus'?'none':'inline')+";")>
-{% #/print float_operation==='add'?'+':(float_operation==='substruct'?'-':(float_operation==='multiply'?'*':(float_operation==='divide'?'/':'Error'))) %}
+{% #/print float_operation==='minus'?'':(matchKeyVal(float_operation,float_binary_operation_symbols)) %}
 </span>
 {%/%}
 {%#%}
@@ -282,6 +282,7 @@ You can also use JSON/dictionary values:
 <script>
 setTimeout(
     function() {
+
     {% #/set test_json.v10 = 5 %}
     
     setTimeout(

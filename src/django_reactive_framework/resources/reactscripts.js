@@ -182,3 +182,13 @@ function __reactive_print_html(obj) {
     else
         return obj.toString();
 }
+
+function __reactive_match(key, array) {
+    for (var i = 0; i < array.length; ++i) {
+        if (key === array[i].key)
+            return array[i].value;
+    }
+    // otherwise
+
+    throw "Error in __reactive_match: No matching key: (" + key + ") in array (" + array + ")";
+}
