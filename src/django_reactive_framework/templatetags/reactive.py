@@ -4,6 +4,7 @@ import itertools
 from itertools import chain
 
 from django import template
+from django.utils.html import escape
 from django.utils.safestring import mark_safe
 
 from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
@@ -1264,15 +1265,16 @@ class ReactPrintNode(ReactNode):
             elif val_initial is False:
                 return 'False'
             else:
-                # TODO: HTML excaping also after reaction hook, in js
-                return str(val_initial)
+                return escape(val_initial)
 
         def render_js_and_hooks(self, subtree: List) -> Tuple[str, Iterable[ReactHook]]:
-            # TODO: HTML escaping?
-            
             control_var, print_var = self.make_vars()
 
-            return VariableExpression(print_var.name).eval_js_html_output_and_hooks(self)[0], [print_var]
+            unescaped_js = VariableExpression(print_var.name).eval_js_html_output_and_hooks(self)[0]
+
+            escaped_js = f'__reactive_print_html({unescaped_js}, true)'
+
+            return escaped_js, [print_var]
 
     def __init__(self, expression: Expression):
         self.expression = expression

@@ -38,8 +38,7 @@ class Expression:
         """ Return a tupple of (js_html_output_expression, hooks) """
         val_js, hooks = self.eval_js_and_hooks(react_context, delimiter)
         
-        # TODO: HTML escaping in this JS method?
-        return f'__reactive_print_html({val_js})', hooks
+        return f'__reactive_print_html_unsafe({val_js})', hooks
 
 class SettableExpression(Expression):
     @abstractmethod

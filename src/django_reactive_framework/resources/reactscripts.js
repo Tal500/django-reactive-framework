@@ -137,12 +137,17 @@ function __reactive_data_destroy(self) {
     self.dep_data_and_attachments = null;
 }
 
-function __reactive_print_html(obj) {
+// Based on https://stackoverflow.com/questions/3043775/how-to-escape-html
+function __reactive_html_escape(str) {
+    return str.replace(/[\x26\x0A\<>'"]/g,function(r){return"&#"+r.charCodeAt(0)+";"})
+}
+
+function __reactive_print_html_unsafe(obj) {
     function print_sub_element(obj) {
         if (typeof obj === "string")
             return "'" + obj + "'";
         else
-            return __reactive_print_html(obj);
+            return __reactive_print_html_unsafe(obj);
     }
 
     if (obj === null)
@@ -181,6 +186,14 @@ function __reactive_print_html(obj) {
     }
     else
         return obj.toString();
+}
+
+function __reactive_print_html(obj, escape_html) {
+    const unescaped_output = __reactive_print_html_unsafe(obj);
+    if (escape_html)
+        return __reactive_html_escape(unescaped_output);
+    else
+        return unescaped_output;
 }
 
 function __reactive_match(key, array) {

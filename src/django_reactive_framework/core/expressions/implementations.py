@@ -33,7 +33,6 @@ class StringExpression(Expression):
         return str_repr(self.val, delimiter), []
 
     def eval_js_html_output_and_hooks(self, react_context: Optional['ReactContext'], delimiter: str = sq) -> Tuple[str, List['ReactHook']]:
-        # TODO: HTML escaping?
         return str_repr(self.val, delimiter), []
     
     @staticmethod
