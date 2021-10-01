@@ -510,7 +510,11 @@ class TernaryOperatorExpression(Expression):
             return self.expression_if_false.constant
     
     def reduce(self, template_context: template.Context):
-        return TernaryOperatorExpression(self.condition, self.expression_if_true, self.expression_if_false)
+        condition = self.condition.reduce(template_context)
+        expression_if_true = self.expression_if_true.reduce(template_context)
+        expression_if_false = self.expression_if_false.reduce(template_context)
+
+        return TernaryOperatorExpression(condition, expression_if_true, expression_if_false)
     
     def eval_initial(self, react_context: Optional['ReactContext']) -> 'ReactValType':
         if self.eval_condition_initial(react_context):
