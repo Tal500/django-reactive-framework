@@ -36,11 +36,11 @@ def parse_first_string(expression: str, delimiter: str) -> Optional[Tuple[str, i
             next_char = expression[i+1]
             if next_char == delimiter:
                 output.append(delimiter)
-            if next_char == '\\':
+            elif next_char == '\\':
                 output.append('\\')
-            if next_char == 'n':
+            elif next_char == 'n':
                 output.append('\n')
-            if next_char == 't':
+            elif next_char == 't':
                 output.append('\t')
             else:
                 return None
