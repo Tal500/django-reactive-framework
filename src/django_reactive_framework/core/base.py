@@ -430,6 +430,10 @@ class ReactContext:
                     j += len(reacttrack_uuid_str)
 
                     i = render_result.find(reacttrack_uuid_str, j)
+                
+                # Add the last reminder, if was in the while loop (if any)
+                if j > 0 and j < len(render_result):
+                    parse_text(render_result[j:])
 
                 template_context[reacttrack_str] = parent_tracker
         
