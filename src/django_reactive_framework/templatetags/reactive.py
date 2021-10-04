@@ -20,7 +20,7 @@ class ReactBlockNode(ReactNode):
     tag_name = 'block'
     class Context(ReactContext):
         def __init__(self, parent, id: str):
-            super().__init__(id=id, parent=parent)
+            super().__init__(id=id, parent=parent, fully_reactive=True)
     
         def var_js(self, var):
             return f'{var.name}_{self.id}'
