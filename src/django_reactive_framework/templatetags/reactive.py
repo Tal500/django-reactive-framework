@@ -1,3 +1,4 @@
+from os import replace
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import itertools
@@ -7,7 +8,7 @@ from django import template
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 
-from ..core.base import ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
+from ..core.base import ReactBlockReplaceNode, ReactHook, ReactRerenderableContext, ReactValType, ReactVar, ReactContext, ReactNode, ResorceScript, next_id_by_context, value_to_expression
 from ..core.expressions import BinaryOperatorExpression, BoolExpression, EscapingContainerExpression, Expression, FunctionCallExpression, IntExpression, NativeVariableExpression, SettableExpression, SettablePropertyExpression, StringExpression, SumExpression, TernaryOperatorExpression, VariableExpression, parse_expression
 from ..core.reactive_function import CustomReactiveFunction
 from ..core.reactive_binary_operators import StrictEqualityOperator
@@ -1301,11 +1302,30 @@ def do_reactprint(parser: template.base.Parser, token: template.base.Token):
         )
     # otherwise
 
-    extra_attach = bits[2:]# TODO: Use it
-
     expression = bits[1]
 
     return ReactPrintNode(parse_expression(expression))
+
+# TODO: Add a test case (in the example) for this feature
+@register.tag('#' + ReactPrintNode.tag_name)
+def do_reactprintblock(parser: template.base.Parser, token: template.base.Token):
+    bits = list(smart_split(token.contents, whitespaces, common_delimiters))
+
+    if len(bits) < 2:
+        raise template.TemplateSyntaxError(
+            "%r tag requires at least two arguments" % token.contents.split()[0]
+        )
+    # otherwise
+
+    remaining_bits = bits[1:]
+    parts = split_kwargs(remaining_bits)
+
+    replacements = [(key, ReactPrintNode(parse_expression(expression_str))) for key, expression_str in parts]
+
+    nodelist = parser.parse(('/' + ReactPrintNode.tag_name,))
+    parser.delete_first_token()
+
+    return ReactBlockReplaceNode(nodelist, replacements)
 
 class ReactGetNode(ReactNode):
     tag_name = 'get'

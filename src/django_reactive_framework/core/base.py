@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Dict, Iterable, List, Optional, Set, Union, Tuple
+from typing import Dict, Iterable, List, Optional, Union, Tuple
 
 from itertools import chain
 import uuid
@@ -208,6 +208,18 @@ reacttrack_str = "react_track"
 class ReactTracker:
     def __init__(self):
         self.children: List[ReactNode] = []
+    
+    @staticmethod
+    def get_current_tracker(template_context: template.Context):
+        return template_context.get(reacttrack_str)
+
+    def create_child_tracker(self, node: 'ReactNode'):
+        index = len(self.children)
+        self.children.append(node)
+
+        tracker_str = reacttrack_uuid_str + str(index) + reacttrack_uuid_str
+        return tracker_str
+
 class ReactContext:
     def __init__(self, id: str, parent: 'ReactContext' = None, fully_reactive: bool = False):
         self.id: str = id
@@ -513,16 +525,55 @@ class ReactNode(template.Node):
                 script.initial_post_calc + '\n' + \
                 '}\n</script>' if script else '')
         else:
-            tracker: Optional[ReactTracker] = template_context.get(reacttrack_str)
+            tracker: Optional[ReactTracker] = ReactTracker.get_current_tracker(template_context)
 
             if not tracker:
                 raise Exception("Internal error in reactive -" + \
                     " the reactive tag isn't toplevel but called with render without a tracker!")
             # otherwise
 
-            index = len(tracker.children)
-            tracker.children.append(self)
+            tracker_str = tracker.create_child_tracker(self)
 
-            return mark_safe(reacttrack_uuid_str + str(index) + reacttrack_uuid_str)
+            return mark_safe(tracker_str)
+
+class ReactBlockReplaceNode(template.Node):
+    tag_name: str = ""
+
+    def __init__(self, nodelist: List[template.Node], replacements: List[Tuple[str, ReactNode]]) -> None:
+
+        self.nodelist: List[template.Node] = nodelist
+        self.replacements = replacements
+
+    def render(self, template_context: template.Context):
+        parent_context: ReactContext = ReactContext.get_current(template_context, self.tag_name, True)
+
+        is_toplevel: bool = parent_context is None
+
+        if is_toplevel:
+            raise Exception('ReactBlockReplaceNode cannot be on toplevel!')
+        # otherwise
+
+        parent: Optional[ReactTracker] = ReactTracker.get_current_tracker(template_context)
+
+        if not parent:
+            raise Exception("Internal error in reactive -" + \
+                " the reactive tag isn't toplevel but called with render without a tracker!")
+        # otherwise
+
+        for django_var, react_node in self.replacements:
+            tracker_str = parent.create_child_tracker(react_node)
+
+            if django_var in template_context:
+                raise Exception('Error in reactive node: cannot export tracker to an already existing variable!')
+            # otherwise
+
+            template_context[django_var] = tracker_str
+
+        value = ''.join(node.render(template_context) for node in self.nodelist)
+
+        for django_var, react_node in self.replacements:
+            del template_context[django_var]
+        
+        return value
 
 from .expressions import *
