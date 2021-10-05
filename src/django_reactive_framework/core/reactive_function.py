@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import List, Dict
+from typing import Callable, List, Dict
 
 from itertools import chain
 
@@ -30,7 +30,11 @@ class ReactiveFunction:
         return chain.from_iterable((arg.eval_js_and_hooks(reactive_context)[1] for arg in args))
 
 class CustomReactiveFunction(ReactiveFunction):
-    def __init__(self, eval_initial_func, eval_js_func, validate_args_func = lambda args: True):
+    def __init__(self,
+        eval_initial_func: Callable[[ReactContext, List['Expression']], ReactValType],
+        eval_js_func: Callable[[ReactContext, str, List['Expression']], str],
+        validate_args_func: Callable[[List['Expression']], None] = lambda args: None):
+
         self.validate_args_func = validate_args_func
         self.eval_initial_func = eval_initial_func
         self.eval_js_func = eval_js_func
