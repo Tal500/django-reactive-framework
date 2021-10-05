@@ -981,7 +981,7 @@ def do_reactfor(parser: template.base.Parser, token: template.base.Token):
 
     if len(bits) == 6:
         by_str = bits[4]
-        if in_str != 'in':
+        if by_str != 'by':
             raise template.TemplateSyntaxError(
                 "%r tag requires that the fifth arguments will be 'by', or nothing at all" % token.contents.split()[0]
             )
