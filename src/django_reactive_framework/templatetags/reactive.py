@@ -18,7 +18,7 @@ register = template.Library()
 
 class ReactBlockNode(ReactNode):
     tag_name = 'block'
-    class Context(ReactContext):
+    class Context(ReactRerenderableContext):
         def __init__(self, parent, id: str):
             super().__init__(id=id, parent=parent, fully_reactive=True)
     
@@ -27,6 +27,9 @@ class ReactBlockNode(ReactNode):
 
         def render_html(self, subtree: List) -> str:
             return self.render_html_inside(subtree)
+
+        def render_js_and_hooks(self, subtree: Optional[List]) -> Tuple[str, Iterable[ReactHook]]:
+            return self.render_js_and_hooks_inside(subtree)
 
     def __init__(self, nodelist):
         super().__init__(nodelist=nodelist, can_be_top_level=True)
